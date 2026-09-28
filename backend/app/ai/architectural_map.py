@@ -206,6 +206,32 @@ class ArchitecturalMapService:
 
 
     @staticmethod
+    def _clean_label(
+        label: str,
+        classes: list[str],
+    ) -> str:
+        """
+        Grounding DINO can merge several matched phrases
+        into one label, e.g. "wall wall lower wall".
+        Keep the most specific class it contains.
+        """
+
+        matches = [
+            name
+            for name in classes
+            if name in label
+        ]
+
+        if not matches:
+            return label.strip()
+
+        return max(
+            matches,
+            key=len,
+        )
+
+
+    @staticmethod
     def _remove_small_components(
         mask: np.ndarray,
         min_area: int = 500,
@@ -391,7 +417,10 @@ class ArchitecturalMapService:
                 surfaces.append(
                     {
                         "id": surface_id,
-                        "type": detection["label"],
+                        "type": self._clean_label(
+                            detection["label"],
+                            PAINTABLE_CLASSES,
+                        ),
                         "score": float(
                             min(
                                 detection["score"],
