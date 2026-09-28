@@ -64,5 +64,7 @@
 
   {"code":"058","name":"Purple","hex":"#8063A5","category":"Purples"},
   {"code":"042","name":"Jade","hex":"#23708F","category":"Blues"},
-  {"code":"059","name":"Ivory Silk","hex":"#E9E4CF","category":"Whites"}
+  {"code":"059","name":"Ivory Silk","hex":"#E9E4CF","category":"Whites"},
+  {"code":"M51","name":"Golden Needles","hex":"#D8CA9D","category":"Neutrals"},
+  {"code":"M31","name":"Beaver","hex":"#4A413B","category":"Browns"}
 ]
