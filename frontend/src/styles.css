@@ -299,6 +299,12 @@ button.category.active {
   padding: 4px;
 }
 
+.shade-empty {
+  margin: 4px 0 8px;
+  font-size: 12px;
+  color: #777;
+}
+
 button.shade {
   margin: 0;
   padding: 0;

@@ -125,6 +125,9 @@ export default function App() {
   const [shades, setShades] =
     useState<Shade[]>([]);
 
+  const [shadesError, setShadesError] =
+    useState(false);
+
   const [shadeSearch, setShadeSearch] =
     useState('');
 
@@ -257,29 +260,61 @@ export default function App() {
    * Load company shades
    */
 
+  /*
+   * The backend can still be starting up (loading
+   * the AI models) when the page opens, so keep
+   * retrying instead of giving up after one try.
+   */
   useEffect(() => {
-    fetch(
-      `${API}/api/visualizer/shades`
-    )
-      .then(async (res) => {
+    let cancelled = false;
+    let attempt = 0;
+    let timer: ReturnType<typeof setTimeout>;
+
+    const load = async () => {
+      try {
+        const res =
+          await fetch(
+            `${API}/api/visualizer/shades`
+          );
+
         if (!res.ok) {
           throw new Error(
             'Could not load shades'
           );
         }
 
-        return res.json();
-      })
-      .then((data) => {
-        setShades(
-          data.shades || []
+        const data =
+          await res.json();
+
+        if (!cancelled) {
+          setShades(
+            data.shades || []
+          );
+
+          setShadesError(false);
+        }
+      } catch {
+        if (cancelled) {
+          return;
+        }
+
+        setShadesError(true);
+
+        attempt += 1;
+
+        timer = setTimeout(
+          load,
+          Math.min(2000 * attempt, 10000)
         );
-      })
-      .catch(() => {
-        setMessage(
-          'Could not load company shade library.'
-        );
-      });
+      }
+    };
+
+    void load();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, []);
 
   const categories = [
@@ -2097,6 +2132,14 @@ void analyze(
                   )
                 )}
               </div>
+
+              {shades.length === 0 && (
+                <p className="shade-empty">
+                  {shadesError
+                    ? 'Waiting for the server to load the shade library… retrying automatically.'
+                    : 'Loading shades…'}
+                </p>
+              )}
 
               <div className="shade-grid">
                 {filteredShades.map(
