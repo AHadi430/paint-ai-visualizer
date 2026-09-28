@@ -1,0 +1,68 @@
+[
+  {"code":"002","name":"Off White","hex":"#D9DCE8","category":"Whites"},
+  {"code":"051","name":"Whipped Cream","hex":"#D9D9E5","category":"Whites"},
+  {"code":"009","name":"Badami","hex":"#E2DFD5","category":"Neutrals"},
+  {"code":"005","name":"Rose White","hex":"#E8E3DD","category":"Whites"},
+  {"code":"040","name":"Tea Rose","hex":"#AAA3A8","category":"Neutrals"},
+
+  {"code":"001","name":"Lily White","hex":"#DCE2D9","category":"Whites"},
+  {"code":"016","name":"Peach Goddess","hex":"#BEB9B1","category":"Neutrals"},
+  {"code":"010","name":"Cockshell","hex":"#E3D5C9","category":"Neutrals"},
+  {"code":"006","name":"Grip Pink","hex":"#E5DCE3","category":"Pinks"},
+  {"code":"032","name":"Orange","hex":"#D57C6B","category":"Reds & Oranges"},
+
+  {"code":"003","name":"Cream","hex":"#E5DCC1","category":"Neutrals"},
+  {"code":"036","name":"Cameo","hex":"#999590","category":"Neutrals"},
+  {"code":"017","name":"Evening Blush","hex":"#A99AAA","category":"Pinks"},
+  {"code":"048","name":"Palm Beach Pink","hex":"#D5C4CF","category":"Pinks"},
+  {"code":"008","name":"Tile Red","hex":"#A72F3C","category":"Reds & Oranges"},
+
+  {"code":"004","name":"Fawn","hex":"#CDB99D","category":"Neutrals"},
+  {"code":"052","name":"Warm Beige","hex":"#B5A999","category":"Neutrals"},
+  {"code":"037","name":"Terracotta","hex":"#9A6558","category":"Reds & Oranges"},
+  {"code":"050","name":"Honey Dew","hex":"#B4A995","category":"Neutrals"},
+  {"code":"053","name":"Jamaican Ginger","hex":"#9A8368","category":"Neutrals"},
+  {"code":"014","name":"Spice","hex":"#514842","category":"Neutrals"},
+
+  {"code":"054","name":"Pink Violet","hex":"#B9A6D0","category":"Pinks"},
+  {"code":"031","name":"Opal Lilac","hex":"#9581D8","category":"Purples"},
+  {"code":"021","name":"Bright Blue","hex":"#45A0D9","category":"Blues"},
+  {"code":"045","name":"Lilac","hex":"#B8B9E1","category":"Purples"},
+
+  {"code":"035","name":"Blossom Pink","hex":"#D5A8D2","category":"Pinks"},
+  {"code":"022","name":"Classical","hex":"#AEA6C0","category":"Purples"},
+  {"code":"044","name":"Carnival Pink","hex":"#9A52B5","category":"Pinks"},
+  {"code":"038","name":"Sea Blue","hex":"#4E82CE","category":"Blues"},
+  {"code":"015","name":"Ash White","hex":"#D7D8D7","category":"Whites"},
+
+  {"code":"043","name":"Sand Pink","hex":"#DDB9C6","category":"Pinks"},
+  {"code":"034","name":"Mallow","hex":"#AAA4C9","category":"Purples"},
+  {"code":"019","name":"Snowbell","hex":"#91C1D8","category":"Blues"},
+  {"code":"030","name":"Sky Blue","hex":"#3974C7","category":"Blues"},
+  {"code":"020","name":"Charisma","hex":"#8EADCA","category":"Blues"},
+
+  {"code":"007","name":"Deep Rose","hex":"#B48EA9","category":"Pinks"},
+  {"code":"049","name":"Parasol","hex":"#9B87D5","category":"Purples"},
+  {"code":"033","name":"Soothing Lilac","hex":"#A6C6DF","category":"Purples"},
+  {"code":"029","name":"Lavender White","hex":"#B3B8CE","category":"Purples"},
+  {"code":"018","name":"Goose Wing","hex":"#70767D","category":"Neutrals"},
+
+  {"code":"047","name":"Bone White","hex":"#BFC5C7","category":"Whites"},
+  {"code":"028","name":"Apple White","hex":"#E0E8C8","category":"Whites"},
+  {"code":"046","name":"Pastel Green","hex":"#C1D2A8","category":"Greens"},
+  {"code":"023","name":"Splash","hex":"#9CC9D1","category":"Greens"},
+
+  {"code":"041","name":"Lime Juice","hex":"#B5D783","category":"Greens"},
+  {"code":"025","name":"Apple Green","hex":"#53B89A","category":"Greens"},
+  {"code":"055","name":"Silver Grey","hex":"#A5A5A2","category":"Neutrals"},
+  {"code":"057","name":"Dove White","hex":"#E0E1D7","category":"Whites"},
+
+  {"code":"024","name":"Crystal Green","hex":"#7DC4C2","category":"Greens"},
+  {"code":"026","name":"Spring Green","hex":"#86BE91","category":"Greens"},
+  {"code":"027","name":"Leaf Green","hex":"#587B3E","category":"Greens"},
+  {"code":"056","name":"Brazil Nut","hex":"#DDD4B4","category":"Neutrals"},
+
+  {"code":"058","name":"Purple","hex":"#8063A5","category":"Purples"},
+  {"code":"042","name":"Jade","hex":"#23708F","category":"Blues"},
+  {"code":"059","name":"Ivory Silk","hex":"#E9E4CF","category":"Whites"}
+]
