@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+node_modules/
+dist/
+uploads/*
+outputs/*
+models/*
+.DS_Store
+
+# Local copy of facebookresearch/sam2 (installed from GitHub instead)
+sam2-source/
+
+# Model weights are downloaded separately (see README)
+*.pt
