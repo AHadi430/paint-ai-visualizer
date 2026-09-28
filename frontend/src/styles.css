@@ -234,6 +234,101 @@ button.secondary {
   z-index: 4;
 }
 
+.surface-panel,
+.painted-panel {
+  margin-top: 24px;
+  max-width: 440px;
+}
+
+.surface-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+button.surface-item {
+  margin: 0;
+  padding: 9px 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #f7f5f0;
+  color: #171717;
+  border: 1px solid #d0cbc2;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+button.surface-item small {
+  font-size: 11px;
+  font-weight: 600;
+  color: #8a857c;
+}
+
+button.surface-item.selected {
+  background: #171717;
+  color: white;
+  border-color: #171717;
+}
+
+button.surface-item.selected small {
+  color: #b5b0a7;
+}
+
+.surface-color {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.painted-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  background: #f7f5f0;
+  border: 1px solid #d4cec4;
+  border-radius: 8px;
+}
+
+.painted-color {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.painted-item > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.painted-item strong {
+  display: block;
+  font-size: 13px;
+}
+
+.painted-item small {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: #777;
+}
+
+.painted-item button {
+  margin: 0;
+  padding: 4px 10px;
+  background: transparent;
+  color: #555;
+  border: 1px solid #ccc6bb;
+  font-size: 16px;
+  line-height: 1;
+}
+
 .color-panel {
   margin-top: 24px;
   padding: 18px;

@@ -115,6 +115,53 @@ async function postJson<T>(
   return data as T;
 }
 
+/*
+ * Human-friendly surface names. Repeated types are
+ * numbered ("Lower wall 1", "Lower wall 2") so the
+ * list entries can be told apart.
+ */
+function surfaceLabels(
+  surfaces: Surface[]
+): Map<string, string> {
+  const baseName = (surface: Surface) =>
+    surface.type === 'manual surface'
+      ? 'Your selection'
+      : surface.type.charAt(0).toUpperCase() +
+        surface.type.slice(1);
+
+  const totals = new Map<string, number>();
+
+  for (const surface of surfaces) {
+    const name = baseName(surface);
+
+    totals.set(
+      name,
+      (totals.get(name) ?? 0) + 1
+    );
+  }
+
+  const seen = new Map<string, number>();
+  const labels = new Map<string, string>();
+
+  for (const surface of surfaces) {
+    const name = baseName(surface);
+
+    const index =
+      (seen.get(name) ?? 0) + 1;
+
+    seen.set(name, index);
+
+    labels.set(
+      surface.id,
+      (totals.get(name) ?? 0) > 1
+        ? `${name} ${index}`
+        : name
+    );
+  }
+
+  return labels;
+}
+
 export default function App() {
   const input =
     useRef<HTMLInputElement>(null);
@@ -1512,7 +1559,7 @@ void analyze(
     );
 
     setMessage(
-      `${surface.type} selected. Choose a company shade.`
+      `${surfaceLabels(surfaces).get(surface.id)} selected. Choose a company shade.`
     );
   }
 
@@ -1532,7 +1579,7 @@ void analyze(
     );
 
     setMessage(
-      `${surface.type} selected. Choose a company shade.`
+      `${surfaceLabels(surfaces).get(surface.id)} selected. Choose a company shade.`
     );
   }
 
@@ -1812,6 +1859,9 @@ void analyze(
     !!cleanPhoto &&
     imageId === cleanPhoto.id;
 
+  const surfaceNames =
+    surfaceLabels(surfaces);
+
   const selectedSurfaceData =
     surfaces.find(
       surface =>
@@ -2015,18 +2065,6 @@ void analyze(
                         }
                         disabled={busy}
                       >
-                        <span>
-                          {surface.type}
-                        </span>
-
-                        <small>
-                          {(
-                            surface.score *
-                            100
-                          ).toFixed(0)}
-                          %
-                        </small>
-
                         {paintedSurface && (
                           <span
                             className="surface-color"
@@ -2035,6 +2073,21 @@ void analyze(
                                 paintedSurface.color,
                             }}
                           />
+                        )}
+
+                        <span>
+                          {surfaceNames.get(surface.id)}
+                        </span>
+
+                        {/* Manual selections are exact, so a
+                            confidence score is meaningless. */}
+                        {surface.type !== 'manual surface' && (
+                          <small title="AI detection confidence">
+                            {Math.round(
+                              surface.score * 100
+                            )}
+                            %
+                          </small>
                         )}
                       </button>
                     );
@@ -2071,10 +2124,14 @@ void analyze(
 
                       <small>
                         {item.shadeCode}
+                        {surfaceNames.has(item.surface_id) &&
+                          ` · ${surfaceNames.get(item.surface_id)}`}
                       </small>
                     </div>
 
                     <button
+                      type="button"
+                      aria-label="Remove paint"
                       onClick={() =>
                         removeSurfacePaint(
                           item.surface_id
