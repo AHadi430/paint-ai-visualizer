@@ -80,6 +80,14 @@ class TransferRequest(BaseModel):
 
 IMAGE_ID = re.compile(r"^[0-9a-f]{32}$")
 
+# Ids and names that end up in file paths must never
+# contain "/" or "..".
+SURFACE_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+SAFE_FILENAME = re.compile(
+    r"^[A-Za-z0-9_-]{1,128}\.(png|jpg|jpeg|webp)$"
+)
+
 # Per-image files that are NOT surface masks.
 NON_MASK_SUFFIXES = (
     "_painted.png",
@@ -87,9 +95,31 @@ NON_MASK_SUFFIXES = (
 )
 
 
+def _check_surface_id(surface_id: str) -> str:
+
+    if not isinstance(surface_id, str) or not SURFACE_ID.match(surface_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid surface id.",
+        )
+
+    return surface_id
+
+
+def _check_filename(filename: str) -> str:
+
+    if not SAFE_FILENAME.match(filename):
+        raise HTTPException(
+            status_code=404,
+            detail="File not found.",
+        )
+
+    return filename
+
+
 def _find_upload(image_id: str) -> Path:
 
-    if not IMAGE_ID.match(image_id):
+    if not isinstance(image_id, str) or not IMAGE_ID.match(image_id):
         raise HTTPException(
             status_code=400,
             detail="Invalid image id.",
@@ -220,19 +250,7 @@ def create_paintable_preview(
             detail="image_id is required.",
         )
 
-    matches = list(
-        Path(settings.upload_dir).glob(
-            f"{image_id}.*"
-        )
-    )
-
-    if not matches:
-        raise HTTPException(
-            status_code=404,
-            detail="Image not found.",
-        )
-
-    image_path = matches[0]
+    image_path = _find_upload(image_id)
 
     preview_filename = (
         f"{image_id}_paintable_preview.png"
@@ -271,25 +289,13 @@ def create_paintable_preview(
 def segment_polygon(
     request: PolygonSegmentRequest,
 ):
-    matches = list(
-        Path(settings.upload_dir).glob(
-            f"{request.image_id}.*"
-        )
-    )
-
-    if not matches:
-        raise HTTPException(
-            status_code=404,
-            detail="Image not found.",
-        )
+    image_path = _find_upload(request.image_id)
 
     if len(request.points) < 3:
         raise HTTPException(
             status_code=400,
             detail="A polygon requires at least 3 points.",
         )
-
-    image_path = matches[0]
 
     try:
         image = Image.open(
@@ -497,7 +503,7 @@ def segment_polygon(
         # Unique surface ID
         # -------------------------------------------------
 
-        surface_id = (
+        surface_id = _check_surface_id(
             request.surface_id
             or f"manual_{uuid4().hex[:12]}"
         )
@@ -567,19 +573,7 @@ def segment_polygon(
 def segment_image(
     request: SegmentRequest,
 ):
-    matches = list(
-        Path(settings.upload_dir).glob(
-            f"{request.image_id}.*"
-        )
-    )
-
-    if not matches:
-        raise HTTPException(
-            404,
-            "Image not found.",
-        )
-
-    image_path = matches[0]
+    image_path = _find_upload(request.image_id)
 
     try:
         mask, confidence = (
@@ -597,7 +591,7 @@ def segment_image(
         )
 
     # Give manually selected surfaces a stable ID.
-    surface_id = (
+    surface_id = _check_surface_id(
         request.surface_id
         or "manual_surface"
     )
@@ -671,19 +665,7 @@ def recolor_image(payload: dict):
             detail="surfaces must be a list.",
         )
 
-    matches = list(
-        Path(settings.upload_dir).glob(
-            f"{image_id}.*"
-        )
-    )
-
-    if not matches:
-        raise HTTPException(
-            status_code=404,
-            detail="Image not found.",
-        )
-
-    image_path = matches[0]
+    image_path = _find_upload(image_id)
 
     output_filename = (
         f"{image_id}_painted.png"
@@ -698,6 +680,9 @@ def recolor_image(payload: dict):
 
     for surface in surfaces:
 
+        if not isinstance(surface, dict):
+            continue
+
         surface_id = surface.get("surface_id")
         color = surface.get("color")
 
@@ -705,6 +690,8 @@ def recolor_image(payload: dict):
             continue
 
         # Only allow expected surface IDs.
+        _check_surface_id(surface_id)
+
         mask_filename = (
             f"{image_id}_{surface_id}.png"
         )
@@ -902,6 +889,8 @@ def get_image(
     download: bool = False,
 ):
 
+    _check_filename(filename)
+
     upload_path = (
         Path(settings.upload_dir)
         / filename
@@ -951,10 +940,10 @@ def get_mask(
 ):
     path = (
         Path(settings.output_dir)
-        / filename
+        / _check_filename(filename)
     )
 
-    if not path.exists():
+    if not path.is_file():
         raise HTTPException(
             404,
             "Mask not found.",
@@ -976,19 +965,7 @@ def analyze_image(payload: dict):
             detail="image_id is required.",
         )
 
-    matches = list(
-        Path(settings.upload_dir).glob(
-            f"{image_id}.*"
-        )
-    )
-
-    if not matches:
-        raise HTTPException(
-            status_code=404,
-            detail="Image not found.",
-        )
-
-    image_path = matches[0]
+    image_path = _find_upload(image_id)
 
     try:
 
@@ -1095,10 +1072,10 @@ def get_paint_map(filename: str):
 
     path = (
         Path(settings.output_dir)
-        / filename
+        / _check_filename(filename)
     )
 
-    if not path.exists():
+    if not path.is_file():
         raise HTTPException(
             status_code=404,
             detail="Paint map not found.",
