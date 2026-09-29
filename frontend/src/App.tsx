@@ -246,6 +246,9 @@ export default function App() {
   const drawingStroke =
     useRef(false);
 
+  const colorPanelRef =
+    useRef<HTMLDivElement>(null);
+
   /*
    * Paintable preview URL per image id, so switching
    * between original and clean render is instant.
@@ -1570,17 +1573,78 @@ void analyze(
       return;
     }
 
-    setSelectedSurface(
+    selectForPainting(
       surface.id
+    );
+  }
+
+  /*
+   * The shade currently applied to a surface, if any.
+   */
+
+  function currentShadeOf(
+    surfaceId: string
+  ): Shade | undefined {
+    const item =
+      paintedSurfaces.find(
+        painted =>
+          painted.surface_id === surfaceId
+      );
+
+    if (!item) {
+      return undefined;
+    }
+
+    return (
+      shades.find(
+        shade =>
+          shade.code === item.shadeCode
+      ) ?? {
+        code: item.shadeCode,
+        name: item.shadeName,
+        hex: item.color,
+        category: '',
+      }
+    );
+  }
+
+  /*
+   * Select a surface for painting. If it is already
+   * painted, start from its current shade so the user
+   * can change it (edit) instead of starting over.
+   */
+
+  function selectForPainting(
+    surfaceId: string
+  ) {
+    const current =
+      currentShadeOf(surfaceId);
+
+    const name =
+      surfaceLabels(surfaces).get(surfaceId) ??
+      'Surface';
+
+    setSelectedSurface(
+      surfaceId
     );
 
     setSelectedShade(
-      undefined
+      current
     );
 
-    setMessage(
-      `${surfaceLabels(surfaces).get(surface.id)} selected. Choose a company shade.`
-    );
+    if (current) {
+      // Make sure the current shade is visible.
+      setShadeSearch('');
+      setShadeCategory('All');
+
+      setMessage(
+        `Editing ${name} (currently ${current.name}). Pick a new shade and press Update.`
+      );
+    } else {
+      setMessage(
+        `${name} selected. Choose a company shade.`
+      );
+    }
   }
 
   /*
@@ -1590,16 +1654,28 @@ void analyze(
   function chooseSurface(
     surface: Surface
   ) {
-    setSelectedSurface(
+    selectForPainting(
       surface.id
     );
+  }
 
-    setSelectedShade(
-      undefined
+  /*
+   * Edit button in the Current Paint panel
+   */
+
+  function editPaint(
+    surfaceId: string
+  ) {
+    selectForPainting(
+      surfaceId
     );
 
-    setMessage(
-      `${surfaceLabels(surfaces).get(surface.id)} selected. Choose a company shade.`
+    // The shade card is further down the page.
+    requestAnimationFrame(() =>
+      colorPanelRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+      })
     );
   }
 
@@ -1625,17 +1701,12 @@ void analyze(
 
     /*
      * Replace an existing assignment for this
-     * surface, rather than creating duplicates.
+     * surface in place (editing must not change
+     * which paint sits on top where surfaces
+     * overlap), or add a new one at the end.
      */
 
-    const next =
-      paintedSurfaces.filter(
-        item =>
-          item.surface_id !==
-          selectedSurface
-      );
-
-    next.push({
+    const assignment: PaintedSurface = {
       surface_id:
         selectedSurface,
 
@@ -1647,7 +1718,26 @@ void analyze(
 
       shadeCode:
         selectedShade.code,
-    });
+    };
+
+    const previous =
+      currentShadeOf(selectedSurface);
+
+    const next =
+      previous
+        ? paintedSurfaces.map(item =>
+            item.surface_id === selectedSurface
+              ? assignment
+              : item
+          )
+        : [
+            ...paintedSurfaces,
+            assignment,
+          ];
+
+    const surfaceName =
+      surfaceLabels(surfaces).get(selectedSurface) ??
+      'Surface';
 
     try {
       const res =
@@ -1712,7 +1802,9 @@ void analyze(
       setViewMode('painted');
 
       setMessage(
-        `${next[next.length - 1].shadeName} applied. Select another surface to continue.`
+        previous
+          ? `${surfaceName} changed from ${previous.name} to ${assignment.shadeName}.`
+          : `${assignment.shadeName} applied to ${surfaceName}. Select another surface to continue.`
       );
     } catch (error) {
       setMessage(
@@ -1881,6 +1973,13 @@ void analyze(
 
   const surfaceNames =
     surfaceLabels(surfaces);
+
+  // Paint already on the selected surface (editing).
+  const selectedPaint =
+    paintedSurfaces.find(
+      item =>
+        item.surface_id === selectedSurface
+    );
 
   const selectedSurfaceData =
     surfaces.find(
@@ -2126,7 +2225,11 @@ void analyze(
               {paintedSurfaces.map(
                 item => (
                   <div
-                    className="painted-item"
+                    className={
+                      selectedSurface === item.surface_id
+                        ? 'painted-item editing'
+                        : 'painted-item'
+                    }
                     key={item.surface_id}
                   >
                     <span
@@ -2151,6 +2254,21 @@ void analyze(
 
                     <button
                       type="button"
+                      className="edit-paint"
+                      onClick={() =>
+                        editPaint(
+                          item.surface_id
+                        )
+                      }
+                      disabled={busy}
+                    >
+                      {selectedSurface === item.surface_id
+                        ? 'Editing'
+                        : 'Edit'}
+                    </button>
+
+                    <button
+                      type="button"
                       aria-label="Remove paint"
                       onClick={() =>
                         removeSurfacePaint(
@@ -2168,10 +2286,33 @@ void analyze(
           )}
 
           {selectedSurface && (
-            <div className="color-panel">
+            <div
+              className="color-panel"
+              ref={colorPanelRef}
+            >
               <div className="panel-title">
-                YOUR COMPANY SHADE CARD
+                {selectedPaint
+                  ? `CHANGE PAINT · ${surfaceNames.get(selectedSurface) ?? ''}`
+                  : 'YOUR COMPANY SHADE CARD'}
               </div>
+
+              {selectedPaint && (
+                <p className="editing-note">
+                  Currently{' '}
+                  <span
+                    className="inline-swatch"
+                    style={{
+                      backgroundColor:
+                        selectedPaint.color,
+                    }}
+                  />
+                  <strong>
+                    {selectedPaint.shadeName}
+                  </strong>{' '}
+                  ({selectedPaint.shadeCode}). Pick
+                  a new shade below.
+                </p>
+              )}
 
               <input
                 className="shade-search"
@@ -2288,15 +2429,39 @@ void analyze(
                 onClick={applyPaint}
                 disabled={
                   busy ||
-                  !selectedShade
+                  !selectedShade ||
+                  selectedShade.code ===
+                    selectedPaint?.shadeCode
                 }
               >
                 {busy
                   ? 'Processing…'
-                  : selectedShade
-                    ? `Apply ${selectedShade.name}`
-                    : 'Select a shade'}
+                  : !selectedShade
+                    ? 'Select a shade'
+                    : selectedShade.code ===
+                        selectedPaint?.shadeCode
+                      ? 'This is the current shade'
+                      : selectedPaint
+                        ? `Update to ${selectedShade.name}`
+                        : `Apply ${selectedShade.name}`}
               </button>
+
+              {selectedPaint && (
+                <button
+                  type="button"
+                  className="cancel-edit"
+                  onClick={() => {
+                    setSelectedSurface(undefined);
+                    setSelectedShade(undefined);
+                    setMessage(
+                      'Edit cancelled. The paint was not changed.'
+                    );
+                  }}
+                  disabled={busy}
+                >
+                  Cancel
+                </button>
+              )}
             </div>
           )}
 

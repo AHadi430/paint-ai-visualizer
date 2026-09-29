@@ -329,6 +329,47 @@ button.surface-item.selected small {
   line-height: 1;
 }
 
+.painted-item button.edit-paint {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.painted-item.editing {
+  border-color: #171717;
+  box-shadow: 0 0 0 1px #171717;
+}
+
+.painted-item.editing button.edit-paint {
+  background: #171717;
+  color: white;
+  border-color: #171717;
+}
+
+.editing-note {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: #555;
+  line-height: 1.6;
+}
+
+.inline-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 4px;
+  vertical-align: -1px;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+button.cancel-edit {
+  width: 100%;
+  margin-top: 8px;
+  background: transparent;
+  color: #171717;
+  border: 1px solid #ccc6bb;
+}
+
 .color-panel {
   margin-top: 24px;
   padding: 18px;
