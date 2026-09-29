@@ -2,7 +2,7 @@ from pathlib import Path
 from uuid import uuid4
 from io import BytesIO
 
-from PIL import Image
+from PIL import Image, ImageOps
 import numpy as np
 import cv2
 
@@ -27,6 +27,13 @@ def save_upload(
 
     image = Image.open(
         BytesIO(data)
+    )
+
+    # Phone cameras store pixels sideways plus an EXIF
+    # "rotate me" flag. Apply it, because the flag is
+    # lost when the image is re-saved below.
+    image = ImageOps.exif_transpose(
+        image
     ).convert("RGB")
 
     image.thumbnail(
