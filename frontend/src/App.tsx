@@ -83,6 +83,26 @@ const maskUrl = (
 ) =>
   `${API}/api/visualizer/mask/${imageId}_${surfaceId}.png?t=${Date.now()}`;
 
+/*
+ * Parse a backend response. If the server crashed or a
+ * proxy answered, the body may not be JSON; report that
+ * clearly instead of "Unexpected token < in JSON".
+ */
+async function readJson(res: Response): Promise<any> {
+  const text =
+    await res.text();
+
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(
+      res.ok
+        ? 'The server sent an unexpected response. Please try again.'
+        : `Server error (${res.status}). Please try again in a moment.`
+    );
+  }
+}
+
 async function postJson<T>(
   path: string,
   body: unknown
@@ -103,7 +123,7 @@ async function postJson<T>(
     );
 
   const data =
-    await res.json();
+    await readJson(res);
 
   if (!res.ok) {
     throw new Error(
@@ -331,7 +351,7 @@ export default function App() {
         }
 
         const data =
-          await res.json();
+          await readJson(res);
 
         if (!cancelled) {
           setShades(
@@ -463,7 +483,7 @@ export default function App() {
         );
 
       const data =
-        await res.json();
+        await readJson(res);
 
       if (!res.ok) {
         throw new Error(
@@ -510,7 +530,7 @@ const previewResponse = await fetch(
 );
 
 const previewData =
-  await previewResponse.json();
+  await readJson(previewResponse);
 
 if (!previewResponse.ok) {
   throw new Error(
@@ -580,7 +600,7 @@ void analyze(
         );
 
       const data =
-        await res.json();
+        await readJson(res);
 
       if (!res.ok) {
         throw new Error(
@@ -1269,7 +1289,7 @@ void analyze(
         );
 
       const data =
-        await response.json();
+        await readJson(response);
 
       if (!response.ok) {
         throw new Error(
@@ -1476,7 +1496,7 @@ void analyze(
           );
 
         const data =
-          await res.json();
+          await readJson(res);
 
         if (!res.ok) {
           throw new Error(
@@ -1658,7 +1678,7 @@ void analyze(
         );
 
       const data =
-        await res.json();
+        await readJson(res);
 
       if (!res.ok) {
         throw new Error(
@@ -1757,7 +1777,7 @@ void analyze(
         );
 
       const data =
-        await res.json();
+        await readJson(res);
 
       if (!res.ok) {
         throw new Error(
