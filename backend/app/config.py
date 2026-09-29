@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     upload_dir: str = str(BASE_DIR / "uploads")
     output_dir: str = str(BASE_DIR / "outputs")
     model_dir: str = str(BASE_DIR / "models")
+    # Uploaded photos and generated images older than this
+    # are deleted automatically. 0 disables the cleanup.
+    retention_days: int = 7
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / "backend" / ".env",
         extra="ignore",

@@ -44,6 +44,10 @@ uvicorn app.main:app --reload --port 8000
 ```
 Runs on Apple Silicon (MPS), NVIDIA GPUs (CUDA) or CPU.
 
+Uploaded photos and generated images are deleted automatically after 7
+days. Change this with `RETENTION_DAYS=30` in `backend/.env` (0 turns the
+cleanup off).
+
 ### 3. Frontend
 ```bash
 cd frontend
