@@ -20,7 +20,6 @@ from PIL import Image
 from ..config import settings
 from ..services.image_service import (
     save_upload,
-    apply_paint_color,
     ALLOWED,
 )
 from ..ai.sam import sam_service
@@ -53,11 +52,6 @@ class PolygonSegmentRequest(BaseModel):
     points: list[list[float]]
     surface_id: str | None = None
     surface_type: str = "manual surface"
-
-
-class RecolorRequest(BaseModel):
-    image_id: str
-    color: str
 
 
 class EraseStroke(BaseModel):
