@@ -56,3 +56,46 @@ npm run dev
 ```
 
 Open http://localhost:5173
+
+## Deployment
+
+| Part | Host | Redeploys when |
+|---|---|---|
+| Backend | Hugging Face Space (Docker, free CPU) | a push to `main` changes `backend/` or `deploy/` |
+| Frontend | Vercel (free Hobby plan) | any push to `main` (other branches get preview URLs) |
+
+The free Space has 2 CPUs and no GPU, so it works on smaller images
+(`MAX_IMAGE_SIDE=1600`, `INPAINT_MAX_SIDE=1024`) and is slower than running
+locally. It sleeps after 48 hours without visits; the first request then
+takes a few minutes while it wakes up.
+
+The Space has to be **public** so the website can reach it, which means its
+backend code is visible on Hugging Face. Use of the API is protected by
+`ACCESS_PASSWORD`; the deploy refuses to run without one.
+
+### One-time setup
+
+1. **Hugging Face**: create an account and a token with *write* access at
+   https://huggingface.co/settings/tokens.
+2. **GitHub settings** (run in this folder; `gh` prompts for the secret
+   values so they never end up in your shell history):
+   ```bash
+   gh secret set HF_TOKEN              # the Hugging Face token
+   gh secret set ACCESS_PASSWORD       # the password people will type
+   gh variable set HF_SPACE --body "<hf-username>/paint-ai-visualizer"
+   gh variable set CORS_ORIGIN_REGEX --body 'https://paint-ai-visualizer[a-z0-9-]*\.vercel\.app'
+   gh workflow run deploy-backend.yml
+   ```
+   The first Space build takes about 15 minutes. Watch it on the Space
+   page; the API is at `https://<hf-username>-paint-ai-visualizer.hf.space`.
+3. **Vercel**: sign in with GitHub, *Add New → Project*, import this repo and
+   set
+   - Root Directory: `frontend`
+   - Environment variable `VITE_API_URL` = the Space URL from step 2
+
+### Making changes after deployment
+
+Develop and test locally as usual, then commit and push to `main`: the
+frontend redeploys on Vercel within a minute, and the backend rebuilds on
+Hugging Face when backend files changed. Push to another branch first to
+get a Vercel preview URL without touching the live site.
