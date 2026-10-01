@@ -12,6 +12,7 @@ from ..ai.architectural_map import (
     architectural_map_service,
 )
 from ..ai.sam import sam_service
+from ..config import settings
 
 
 BASE_DIR = Path(__file__).resolve().parents[3]
@@ -131,7 +132,7 @@ class CleanService:
         self,
         image_rgb: np.ndarray,
         mask: np.ndarray,
-        max_side: int = 1600,
+        max_side: int | None = None,
     ) -> np.ndarray:
         """
         Fill the masked pixels with plausible background.
@@ -140,6 +141,9 @@ class CleanService:
 
         if not mask.any():
             return image_rgb.copy()
+
+        if max_side is None:
+            max_side = settings.inpaint_max_side
 
         # Small edits (e.g. a few brush strokes) only need
         # the surrounding region, which is much faster

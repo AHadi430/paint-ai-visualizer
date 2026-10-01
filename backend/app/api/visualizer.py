@@ -216,6 +216,7 @@ async def upload_image(
             data,
             file.filename or "image",
             settings.upload_dir,
+            max_side=settings.max_image_side,
         )
 
     except Exception as exc:

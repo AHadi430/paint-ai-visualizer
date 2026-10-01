@@ -16,6 +16,7 @@ def save_upload(
     data: bytes,
     filename: str,
     upload_dir: str,
+    max_side: int = 2400,
 ) -> tuple[str, Image.Image]:
 
     Path(upload_dir).mkdir(
@@ -35,7 +36,7 @@ def save_upload(
     ).convert("RGB")
 
     image.thumbnail(
-        (2400, 2400),
+        (max_side, max_side),
         Image.Resampling.LANCZOS,
     )
 
