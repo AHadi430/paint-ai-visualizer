@@ -22,7 +22,14 @@ def main() -> None:
 
     folder = sys.argv[1]
     space = os.environ["HF_SPACE"]
+    token = os.environ.get("HF_TOKEN", "")
     password = os.environ.get("ACCESS_PASSWORD", "")
+
+    if not token:
+        sys.exit(
+            "HF_TOKEN is not set. Add a Hugging Face token with write "
+            "access as a GitHub secret: gh secret set HF_TOKEN"
+        )
 
     # The Space must be public so the website can reach it, so
     # never deploy it without a password.
@@ -32,7 +39,7 @@ def main() -> None:
             "before deploying, otherwise anyone could use the API."
         )
 
-    api = HfApi(token=os.environ["HF_TOKEN"])
+    api = HfApi(token=token)
 
     api.create_repo(
         space,
