@@ -1,0 +1,51 @@
+name: Deploy backend to Hugging Face
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "deploy/huggingface/**"
+      - ".github/workflows/deploy-backend.yml"
+  workflow_dispatch:
+
+# A newer push replaces an in-progress deploy.
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Does nothing until the Space is configured (see README).
+    if: ${{ vars.HF_SPACE != '' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Hugging Face client
+        run: pip install "huggingface_hub>=0.25"
+
+      - name: Assemble Space folder
+        run: |
+          mkdir space
+          cp deploy/huggingface/Dockerfile deploy/huggingface/README.md space/
+          rsync -a \
+            --exclude "__pycache__" \
+            --exclude ".venv" \
+            --exclude ".env" \
+            --exclude "test_sam.py" \
+            backend/ space/backend/
+
+      - name: Upload to Hugging Face
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE: ${{ vars.HF_SPACE }}
+          ACCESS_PASSWORD: ${{ secrets.ACCESS_PASSWORD }}
+          CORS_ORIGINS: ${{ vars.CORS_ORIGINS }}
+          CORS_ORIGIN_REGEX: ${{ vars.CORS_ORIGIN_REGEX }}
+        run: python deploy/huggingface/deploy.py space
