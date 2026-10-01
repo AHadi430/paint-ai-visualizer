@@ -1,9 +1,11 @@
 import asyncio
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from .config import settings
 from .api.visualizer import router
@@ -61,12 +63,45 @@ app = FastAPI(
 )
 
 
+@app.middleware("http")
+async def require_access_password(
+    request: Request,
+    call_next,
+):
+    """
+    A shared password for small private deployments.
+
+    Only POST requests (the ones that run the AI models)
+    are protected. Images are served by unguessable
+    random ids, and <img> tags cannot send headers.
+    """
+
+    if (
+        settings.access_password
+        and request.method == "POST"
+        and not secrets.compare_digest(
+            request.headers
+            .get("x-access-password", "")
+            .encode(),
+            settings.access_password.encode(),
+        )
+    ):
+        return JSONResponse(
+            {"detail": "Access password required."},
+            status_code=401,
+        )
+
+    return await call_next(request)
+
+
+# Added last so it runs first: CORS headers must also be
+# present on 401 responses or the browser hides them.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-    ],
+    allow_origins=settings.cors_origin_list,
+    allow_origin_regex=(
+        settings.cors_origin_regex or None
+    ),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -88,3 +123,18 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.post("/api/check-access")
+def check_access():
+    """
+    Lets the frontend test a password: the middleware
+    above has already rejected a wrong one.
+    """
+
+    return {
+        "ok": True,
+        "password_required": bool(
+            settings.access_password
+        ),
+    }
