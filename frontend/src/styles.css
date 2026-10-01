@@ -611,6 +611,46 @@ a.download.disabled {
   position: relative;
 }
 
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(244, 242, 237, 0.92);
+  backdrop-filter: blur(4px);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 360px;
+  padding: 28px;
+  background: #f7f5f0;
+  border: 1px solid #d7d2c8;
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
+}
+
+.login-card p {
+  font-size: 14px;
+  color: #64645e;
+  line-height: 1.5;
+}
+
+.login-card button {
+  width: 100%;
+  margin-top: 14px;
+}
+
+.login-error {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #b42318;
+}
+
 .room-image.erasing {
   cursor: cell;
   /* Let the brush drag instead of scrolling on touch. */

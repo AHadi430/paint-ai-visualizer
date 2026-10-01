@@ -2,6 +2,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type SubmitEvent,
   type MouseEvent,
   type PointerEvent,
 } from 'react';
@@ -84,6 +85,66 @@ const maskUrl = (
   `${API}/api/visualizer/mask/${imageId}_${surfaceId}.png?t=${Date.now()}`;
 
 /*
+ * Access password for private deployments. Stored in the
+ * browser so it is asked for only once per device.
+ */
+const PASSWORD_KEY =
+  'paint-ai-access-password';
+
+function storedPassword(): string {
+  try {
+    return localStorage.getItem(PASSWORD_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function savePassword(password: string) {
+  try {
+    localStorage.setItem(PASSWORD_KEY, password);
+  } catch {
+    // Private browsing: the password lasts this session.
+  }
+}
+
+// Set by the App: shows the password screen.
+let onUnauthorized: () => void = () => {};
+
+/*
+ * fetch() for the backend: sends the access password
+ * and reports a rejected one.
+ */
+async function apiFetch(
+  url: string,
+  init: RequestInit = {}
+): Promise<Response> {
+  const headers =
+    new Headers(init.headers);
+
+  const password =
+    storedPassword();
+
+  if (password) {
+    headers.set(
+      'X-Access-Password',
+      password
+    );
+  }
+
+  const res =
+    await fetch(url, {
+      ...init,
+      headers,
+    });
+
+  if (res.status === 401) {
+    onUnauthorized();
+  }
+
+  return res;
+}
+
+/*
  * Parse a backend response. If the server crashed or a
  * proxy answered, the body may not be JSON; report that
  * clearly instead of "Unexpected token < in JSON".
@@ -95,10 +156,17 @@ async function readJson(res: Response): Promise<any> {
   try {
     return text ? JSON.parse(text) : {};
   } catch {
+    // A free hosted backend sleeps when unused; while it
+    // wakes up the host answers with a 502/503/504 page.
+    const waking =
+      [502, 503, 504].includes(res.status);
+
     throw new Error(
       res.ok
         ? 'The server sent an unexpected response. Please try again.'
-        : `Server error (${res.status}). Please try again in a moment.`
+        : waking
+          ? 'The server is starting up (this can take a few minutes after a quiet period). Please try again shortly.'
+          : `Server error (${res.status}). Please try again in a moment.`
     );
   }
 }
@@ -108,7 +176,7 @@ async function postJson<T>(
   body: unknown
 ): Promise<T> {
   const res =
-    await fetch(
+    await apiFetch(
       `${API}${path}`,
       {
         method: 'POST',
@@ -194,6 +262,76 @@ export default function App() {
 
   const [shadesError, setShadesError] =
     useState(false);
+
+  /*
+   * Access password screen (private deployments).
+   */
+  const [needsPassword, setNeedsPassword] =
+    useState(false);
+
+  const [passwordInput, setPasswordInput] =
+    useState('');
+
+  const [passwordError, setPasswordError] =
+    useState('');
+
+  const [checkingPassword, setCheckingPassword] =
+    useState(false);
+
+  useEffect(() => {
+    onUnauthorized = () =>
+      setNeedsPassword(true);
+
+    // Ask for the password up front if the backend
+    // requires one. Network errors are ignored: the
+    // first real request will ask instead.
+    apiFetch(
+      `${API}/api/check-access`,
+      { method: 'POST' }
+    ).catch(() => {});
+
+    return () => {
+      onUnauthorized = () => {};
+    };
+  }, []);
+
+  async function submitPassword(
+    event: SubmitEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+
+    setCheckingPassword(true);
+    setPasswordError('');
+
+    savePassword(passwordInput);
+
+    try {
+      const res =
+        await apiFetch(
+          `${API}/api/check-access`,
+          { method: 'POST' }
+        );
+
+      if (res.status === 401) {
+        setPasswordError(
+          'Wrong password. Please try again.'
+        );
+      } else if (!res.ok) {
+        setPasswordError(
+          'The server is starting up. Please try again in a minute.'
+        );
+      } else {
+        setNeedsPassword(false);
+        setPasswordInput('');
+      }
+    } catch {
+      setPasswordError(
+        'Could not reach the server. Please try again.'
+      );
+    } finally {
+      setCheckingPassword(false);
+    }
+  }
 
   const [shadeSearch, setShadeSearch] =
     useState('');
@@ -343,7 +481,7 @@ export default function App() {
     const load = async () => {
       try {
         const res =
-          await fetch(
+          await apiFetch(
             `${API}/api/visualizer/shades`
           );
 
@@ -477,7 +615,7 @@ export default function App() {
 
     try {
       const res =
-        await fetch(
+        await apiFetch(
           `${API}/api/visualizer/upload`,
           {
             method: 'POST',
@@ -515,7 +653,7 @@ setMessage(
   'Image uploaded. Creating paintable preview…'
 );
 
-const previewResponse = await fetch(
+const previewResponse = await apiFetch(
   `${API}/api/visualizer/paintable-preview`,
   {
     method: 'POST',
@@ -586,7 +724,7 @@ void analyze(
 
     try {
       const res =
-        await fetch(
+        await apiFetch(
           `${API}/api/visualizer/analyze`,
           {
             method: 'POST',
@@ -1263,7 +1401,7 @@ void analyze(
 
     try {
       const response =
-        await fetch(
+        await apiFetch(
           `${API}/api/visualizer/segment-polygon`,
           {
             method: 'POST',
@@ -1473,7 +1611,7 @@ void analyze(
 
       try {
         const res =
-          await fetch(
+          await apiFetch(
             `${API}/api/visualizer/segment`,
             {
               method: 'POST',
@@ -1741,7 +1879,7 @@ void analyze(
 
     try {
       const res =
-        await fetch(
+        await apiFetch(
           `${API}/api/visualizer/recolor`,
           {
             method: 'POST',
@@ -1842,7 +1980,7 @@ void analyze(
 
     try {
       const res =
-        await fetch(
+        await apiFetch(
           `${API}/api/visualizer/recolor`,
           {
             method: 'POST',
@@ -1989,6 +2127,54 @@ void analyze(
 
   return (
     <main>
+      {needsPassword && (
+        <div className="login-overlay">
+          <form
+            className="login-card"
+            onSubmit={submitPassword}
+          >
+            <div className="brand">
+              PAINT<span>AI</span>
+            </div>
+
+            <p>
+              Enter the access password to use
+              the visualizer.
+            </p>
+
+            <input
+              type="password"
+              className="shade-search"
+              placeholder="Access password"
+              autoFocus
+              value={passwordInput}
+              onChange={(e) =>
+                setPasswordInput(e.target.value)
+              }
+              disabled={checkingPassword}
+            />
+
+            {passwordError && (
+              <small className="login-error">
+                {passwordError}
+              </small>
+            )}
+
+            <button
+              type="submit"
+              disabled={
+                checkingPassword ||
+                !passwordInput
+              }
+            >
+              {checkingPassword
+                ? 'Checking…'
+                : 'Continue'}
+            </button>
+          </form>
+        </div>
+      )}
+
       <header>
         <div className="brand">
           PAINT<span>AI</span>
