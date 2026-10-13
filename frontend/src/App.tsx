@@ -3,6 +3,7 @@ import {
   useRef,
   useState,
   type SubmitEvent,
+  type KeyboardEvent,
   type MouseEvent,
   type PointerEvent,
 } from 'react';
@@ -355,7 +356,7 @@ export default function App() {
     useState<string>();
   
   const [viewMode, setViewMode] =
-    useState<"original" | "clean" | "paintable" | "painted" | "map">(
+    useState<"original" | "clean" | "paintable" | "painted" | "compare" | "map">(
       "paintable"
     );
 
@@ -386,6 +387,16 @@ export default function App() {
 
   const colorPanelRef =
     useRef<HTMLDivElement>(null);
+
+  /*
+   * Before/after divider position, in percent of the
+   * image element's width.
+   */
+  const [comparePos, setComparePos] =
+    useState(50);
+
+  const draggingCompare =
+    useRef(false);
 
   /*
    * Paintable preview URL per image id, so switching
@@ -1117,6 +1128,128 @@ void analyze(
 
   const endStroke = () => {
     drawingStroke.current = false;
+  };
+
+  /*
+   * Before/after slider
+   *
+   * Positions are percentages of the image element.
+   * The photo is letterboxed (object-fit: contain), so
+   * the divider is kept within the photo itself.
+   */
+
+  const photoBounds = () => {
+    const image = imageRef.current;
+
+    if (!image?.naturalWidth) {
+      return { left: 0, right: 100, top: 0, bottom: 100 };
+    }
+
+    const rect =
+      image.getBoundingClientRect();
+
+    const scale =
+      Math.min(
+        rect.width / image.naturalWidth,
+        rect.height / image.naturalHeight
+      );
+
+    const marginX =
+      (rect.width - image.naturalWidth * scale) /
+      2 /
+      rect.width *
+      100;
+
+    const marginY =
+      (rect.height - image.naturalHeight * scale) /
+      2 /
+      rect.height *
+      100;
+
+    return {
+      left: marginX,
+      right: 100 - marginX,
+      top: marginY,
+      bottom: 100 - marginY,
+    };
+  };
+
+  const moveCompareTo = (
+    clientX: number
+  ) => {
+    const image = imageRef.current;
+
+    if (!image) {
+      return;
+    }
+
+    const rect =
+      image.getBoundingClientRect();
+
+    const { left, right } = photoBounds();
+
+    const percent =
+      (clientX - rect.left) / rect.width * 100;
+
+    setComparePos(
+      Math.min(right, Math.max(left, percent))
+    );
+  };
+
+  const startCompareDrag = (
+    event: PointerEvent<HTMLDivElement>
+  ) => {
+    event.preventDefault();
+
+    event.currentTarget.setPointerCapture(
+      event.pointerId
+    );
+
+    draggingCompare.current = true;
+
+    moveCompareTo(event.clientX);
+  };
+
+  const continueCompareDrag = (
+    event: PointerEvent<HTMLDivElement>
+  ) => {
+    if (draggingCompare.current) {
+      moveCompareTo(event.clientX);
+    }
+  };
+
+  const endCompareDrag = () => {
+    draggingCompare.current = false;
+  };
+
+  const nudgeCompare = (
+    event: KeyboardEvent<HTMLDivElement>
+  ) => {
+    const { left, right } = photoBounds();
+
+    const step =
+      (right - left) / 50;
+
+    const next =
+      event.key === 'ArrowLeft'
+        ? comparePos - step
+        : event.key === 'ArrowRight'
+          ? comparePos + step
+          : event.key === 'Home'
+            ? left
+            : event.key === 'End'
+              ? right
+              : null;
+
+    if (next === null) {
+      return;
+    }
+
+    event.preventDefault();
+
+    setComparePos(
+      Math.min(right, Math.max(left, next))
+    );
   };
 
   /*
@@ -2101,9 +2234,24 @@ void analyze(
         ? painted
         : viewMode === "clean" && cleanPhoto
           ? cleanPhoto.url
-          : viewMode === "original" && originalPhoto
+          : (viewMode === "original" || viewMode === "compare") &&
+              originalPhoto
             ? originalPhoto.url
             : preview;
+
+  // Before/after slider: the original photo is the
+  // main image, the painted one is drawn over it and
+  // clipped at the divider.
+  const comparing =
+    viewMode === "compare" && !!painted;
+
+  // Where the photo sits inside the letterboxed image
+  // element; recomputed on every render (dragging and
+  // resizing both re-render).
+  const compareBox =
+    comparing
+      ? photoBounds()
+      : { left: 0, right: 100, top: 0, bottom: 100 };
 
   const paintingOnClean =
     !!cleanPhoto &&
@@ -2250,6 +2398,7 @@ void analyze(
                   ['clean', 'Clean Render', !!cleanPhoto],
                   ['paintable', 'Paintable Preview', !!paintablePreview],
                   ['painted', 'Painted', !!painted],
+                  ['compare', 'Before / After', !!painted],
                   ['map', 'AI Paint Map', !!paintMap],
                 ] as const
               ).map(([mode, label, available]) => (
@@ -2656,15 +2805,15 @@ void analyze(
               className="compare"
               onClick={() =>
                 setViewMode(
-                  viewMode === 'original'
+                  viewMode === 'compare'
                     ? 'painted'
-                    : 'original'
+                    : 'compare'
                 )
               }
             >
-              {viewMode === 'original'
+              {viewMode === 'compare'
                 ? 'Show painted'
-                : 'Show original'}
+                : 'Compare before / after'}
             </button>
           )}
 
@@ -2892,7 +3041,77 @@ void analyze(
   onPointerCancel={endStroke}
 />
 
-              {selectedSurfaceData && (
+              {comparing && (
+                <>
+                  <img
+                    className="compare-after"
+                    src={painted}
+                    alt="Painted"
+                    draggable={false}
+                    style={{
+                      clipPath: `inset(0 0 0 ${comparePos}%)`,
+                    }}
+                  />
+
+                  {/* Catches drags anywhere on the
+                      photo so selection is paused. */}
+                  <div
+                    className="compare-hit"
+                    onPointerDown={startCompareDrag}
+                    onPointerMove={continueCompareDrag}
+                    onPointerUp={endCompareDrag}
+                    onPointerCancel={endCompareDrag}
+                  />
+
+                  <div
+                    className="compare-divider"
+                    style={{
+                      left: `${comparePos}%`,
+                      top: `${compareBox.top}%`,
+                      bottom: `${100 - compareBox.bottom}%`,
+                    }}
+                  >
+                    <div
+                      className="compare-handle"
+                      role="slider"
+                      tabIndex={0}
+                      aria-label="Before and after divider"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={Math.round(comparePos)}
+                      onKeyDown={nudgeCompare}
+                      onPointerDown={startCompareDrag}
+                      onPointerMove={continueCompareDrag}
+                      onPointerUp={endCompareDrag}
+                      onPointerCancel={endCompareDrag}
+                    >
+                      ‹ ›
+                    </div>
+                  </div>
+
+                  <div
+                    className="compare-label before"
+                    style={{
+                      top: `calc(${compareBox.top}% + 12px)`,
+                      left: `calc(${compareBox.left}% + 12px)`,
+                    }}
+                  >
+                    BEFORE
+                  </div>
+
+                  <div
+                    className="compare-label after"
+                    style={{
+                      top: `calc(${compareBox.top}% + 12px)`,
+                      right: `calc(${100 - compareBox.right}% + 12px)`,
+                    }}
+                  >
+                    AFTER
+                  </div>
+                </>
+              )}
+
+              {selectedSurfaceData && !comparing && (
                 <img
                   className="mask"
                   src={selectedSurfaceData.mask_url}
@@ -3006,7 +3225,7 @@ void analyze(
                 </div>
               )}
 
-              {painted && (
+              {painted && !comparing && (
                 <div className="result-badge">
                   PAINT AI
                 </div>
