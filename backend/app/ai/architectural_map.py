@@ -10,6 +10,7 @@ from transformers import (
     AutoModelForZeroShotObjectDetection,
 )
 
+from .device_lock import inference_lock
 from .sam import sam_service
 
 
@@ -144,7 +145,7 @@ class ArchitecturalMapService:
             for key, value in inputs.items()
         }
 
-        with torch.inference_mode():
+        with inference_lock, torch.inference_mode():
 
             outputs = self.model(
                 **inputs

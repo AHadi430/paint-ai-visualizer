@@ -1,4 +1,3 @@
-import threading
 from pathlib import Path
 
 import numpy as np
@@ -7,6 +6,8 @@ from PIL import Image
 
 from sam2.build_sam import build_sam2
 from sam2.sam2_image_predictor import SAM2ImagePredictor
+
+from .device_lock import inference_lock
 
 
 BASE_DIR = Path(__file__).resolve().parents[3]
@@ -47,8 +48,10 @@ class SAMService:
 
         # The predictor holds one image embedding at a
         # time and is shared by every request, so
-        # set_image + predict must run atomically.
-        self.lock = threading.RLock()
+        # set_image + predict must run atomically. The
+        # lock is shared with the other models because
+        # MPS cannot run two threads' work at once.
+        self.lock = inference_lock
 
         # Cache key of the image currently embedded.
         # Computing the embedding is the expensive part,

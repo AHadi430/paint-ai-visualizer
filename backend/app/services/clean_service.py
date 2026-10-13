@@ -11,6 +11,7 @@ from PIL import Image
 from ..ai.architectural_map import (
     architectural_map_service,
 )
+from ..ai.device_lock import inference_lock
 from ..ai.sam import sam_service
 from ..config import settings
 
@@ -189,7 +190,7 @@ class CleanService:
         mask: torch.Tensor,
     ) -> torch.Tensor:
 
-        with torch.inference_mode():
+        with inference_lock, torch.inference_mode():
 
             try:
                 output = self._lama(
