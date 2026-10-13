@@ -379,6 +379,24 @@ export default function App() {
   const [eraseStrokes, setEraseStrokes] =
     useState<EraseStroke[]>([]);
 
+  /*
+   * Adjust area mode: grow ("add") or shrink
+   * ("remove") the selected surface with the brush or
+   * a polygon.
+   */
+  const [areaOp, setAreaOp] =
+    useState<'add' | 'remove'>('add');
+
+  const [areaTool, setAreaTool] =
+    useState<'brush' | 'polygon'>('brush');
+
+  const [areaStrokes, setAreaStrokes] =
+    useState<EraseStroke[]>([]);
+
+  // Surfaces whose area edits can be undone.
+  const [undoableSurfaces, setUndoableSurfaces] =
+    useState<Set<string>>(new Set());
+
   const [brushSize, setBrushSize] =
     useState(28);
 
@@ -430,7 +448,7 @@ export default function App() {
    * the clean render.
    */
   const [selectionMode, setSelectionMode] =
-    useState<'click' | 'polygon' | 'erase'>('polygon');
+    useState<'click' | 'polygon' | 'erase' | 'area'>('polygon');
 
   const [polygonPoints, setPolygonPoints] =
     useState<{ x: number; y: number }[]>([]);
@@ -596,6 +614,8 @@ export default function App() {
     setOriginalPhoto(undefined);
     setCleanPhoto(undefined);
     setEraseStrokes([]);
+    setAreaStrokes([]);
+    setUndoableSurfaces(new Set());
     previewCache.current.clear();
 
     setSurfaces([]);
@@ -1042,8 +1062,14 @@ void analyze(
   }
 
   /*
-   * Erase brush
+   * Brush strokes: Erase mode (clean render) and
+   * Adjust area mode share the same brush.
    */
+
+  const setActiveStrokes =
+    selectionMode === 'area'
+      ? setAreaStrokes
+      : setEraseStrokes;
 
   const startStroke = (
     event: PointerEvent<HTMLImageElement>
@@ -1067,7 +1093,7 @@ void analyze(
 
     drawingStroke.current = true;
 
-    setEraseStrokes(
+    setActiveStrokes(
       previous => [
         ...previous,
         {
@@ -1092,7 +1118,7 @@ void analyze(
       return;
     }
 
-    setEraseStrokes(previous => {
+    setActiveStrokes(previous => {
       const last =
         previous[previous.length - 1];
 
@@ -1465,8 +1491,13 @@ void analyze(
   const handlePolygonClick = (
     event: MouseEvent<HTMLImageElement>
   ) => {
+    const drawingPolygon =
+      selectionMode === 'polygon' ||
+      (selectionMode === 'area' &&
+        areaTool === 'polygon');
+
     if (
-      selectionMode !== 'polygon' ||
+      !drawingPolygon ||
       busy
     ) {
       return;
@@ -2089,6 +2120,305 @@ void analyze(
   }
 
   /*
+   * Re-render the painted image after a surface's
+   * area changed or a surface was deleted.
+   */
+
+  async function rerenderPaint(
+    list: PaintedSurface[]
+  ) {
+    if (!imageId) {
+      return;
+    }
+
+    if (list.length === 0) {
+      setPainted(undefined);
+
+      if (
+        viewMode === 'painted' ||
+        viewMode === 'compare'
+      ) {
+        setViewMode('paintable');
+      }
+
+      return;
+    }
+
+    const data =
+      await postJson<RecolorResponse>(
+        '/api/visualizer/recolor',
+        {
+          image_id: imageId,
+
+          surfaces:
+            list.map(item => ({
+              surface_id: item.surface_id,
+              color: item.color,
+            })),
+        }
+      );
+
+    setPainted(
+      `${API}${data.image_url}?t=${Date.now()}`
+    );
+  }
+
+  /*
+   * Adjust area mode
+   */
+
+  function startAreaEdit() {
+    if (!selectedSurface) {
+      return;
+    }
+
+    setSelectionMode('area');
+    setAreaOp('add');
+    setAreaTool('brush');
+    setAreaStrokes([]);
+    setPolygonPoints([]);
+    setIsDrawingPolygon(false);
+
+    // The selection highlight is hidden while comparing.
+    if (viewMode === 'compare') {
+      setViewMode('painted');
+    }
+
+    setMessage(
+      `Adjusting ${surfaceNames.get(selectedSurface) ?? 'surface'}: brush or outline the area to add or remove, then press Apply.`
+    );
+  }
+
+  function stopAreaEdit() {
+    setSelectionMode('polygon');
+    setAreaStrokes([]);
+    setPolygonPoints([]);
+    setIsDrawingPolygon(false);
+  }
+
+  // Area edits apply to the selected surface: leave the
+  // mode when nothing is selected, and drop half-drawn
+  // areas when a different surface is picked.
+  useEffect(() => {
+    if (selectionMode !== 'area') {
+      return;
+    }
+
+    if (!selectedSurface) {
+      stopAreaEdit();
+    } else {
+      setAreaStrokes([]);
+      setPolygonPoints([]);
+      setIsDrawingPolygon(false);
+    }
+  }, [selectedSurface]);
+
+  /*
+   * After an edit the mask has a new version: a new
+   * URL so the highlight and click tests reload.
+   */
+
+  function updateSurfaceMask(
+    surfaceId: string,
+    box: number[],
+    canUndo: boolean
+  ) {
+    if (!imageId) {
+      return;
+    }
+
+    setSurfaces(
+      previous =>
+        previous.map(surface =>
+          surface.id === surfaceId
+            ? {
+                ...surface,
+                mask_url: maskUrl(imageId, surfaceId),
+                box,
+              }
+            : surface
+        )
+    );
+
+    setUndoableSurfaces(previous => {
+      const next = new Set(previous);
+
+      if (canUndo) {
+        next.add(surfaceId);
+      } else {
+        next.delete(surfaceId);
+      }
+
+      return next;
+    });
+  }
+
+  async function editArea(
+    action: 'add' | 'remove' | 'undo'
+  ) {
+    if (!imageId || !selectedSurface || busy) {
+      return;
+    }
+
+    const usePolygon =
+      action !== 'undo' &&
+      areaTool === 'polygon';
+
+    if (
+      action !== 'undo' &&
+      (usePolygon
+        ? polygonPoints.length < 3
+        : areaStrokes.length === 0)
+    ) {
+      setMessage(
+        usePolygon
+          ? 'Click at least 3 points around the area first.'
+          : 'Brush over the area first.'
+      );
+
+      return;
+    }
+
+    const surfaceId = selectedSurface;
+    const name =
+      surfaceNames.get(surfaceId) ?? 'Surface';
+
+    setBusy(true);
+
+    setMessage(
+      action === 'undo'
+        ? 'Undoing the last area change…'
+        : 'Updating the surface…'
+    );
+
+    try {
+      const data =
+        await postJson<{
+          box: number[];
+          can_undo: boolean;
+        }>(
+          '/api/visualizer/edit-mask',
+          {
+            image_id: imageId,
+            surface_id: surfaceId,
+            action,
+
+            polygon: usePolygon
+              ? polygonPoints.map(point => [
+                  point.x,
+                  point.y,
+                ])
+              : [],
+
+            strokes:
+              action === 'undo' || usePolygon
+                ? []
+                : areaStrokes.map(stroke => ({
+                    points: stroke.points.map(point => [
+                      point.x,
+                      point.y,
+                    ]),
+                    width: stroke.width,
+                  })),
+          }
+        );
+
+      updateSurfaceMask(
+        surfaceId,
+        data.box,
+        data.can_undo
+      );
+
+      setAreaStrokes([]);
+      setPolygonPoints([]);
+      setIsDrawingPolygon(false);
+
+      // Repaint so the change shows on the result.
+      if (
+        paintedSurfaces.some(
+          item => item.surface_id === surfaceId
+        )
+      ) {
+        await rerenderPaint(paintedSurfaces);
+      }
+
+      setMessage(
+        action === 'undo'
+          ? `Last change to ${name} undone.`
+          : action === 'add'
+            ? `Area added to ${name}. Keep adjusting, or press Done.`
+            : `Area removed from ${name}. Keep adjusting, or press Done.`
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Could not update the surface.'
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteSurface(
+    surfaceId: string
+  ) {
+    if (busy) {
+      return;
+    }
+
+    const name =
+      surfaceNames.get(surfaceId) ?? 'Surface';
+
+    if (
+      !window.confirm(
+        `Delete ${name}? Its paint will be removed too.`
+      )
+    ) {
+      return;
+    }
+
+    const next =
+      paintedSurfaces.filter(
+        item => item.surface_id !== surfaceId
+      );
+
+    setBusy(true);
+
+    try {
+      if (next.length !== paintedSurfaces.length) {
+        await rerenderPaint(next);
+      }
+
+      setPaintedSurfaces(next);
+
+      setSurfaces(
+        previous =>
+          previous.filter(
+            surface => surface.id !== surfaceId
+          )
+      );
+
+      setSelectedSurface(undefined);
+      setSelectedShade(undefined);
+
+      if (selectionMode === 'area') {
+        stopAreaEdit();
+      }
+
+      setMessage(`${name} deleted.`);
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Could not delete the surface.'
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /*
    * Remove paint from one surface
    */
 
@@ -2201,6 +2531,8 @@ void analyze(
     setOriginalPhoto(undefined);
     setCleanPhoto(undefined);
     setEraseStrokes([]);
+    setAreaStrokes([]);
+    setUndoableSurfaces(new Set());
     previewCache.current.clear();
 
     setSurfaces([]);
@@ -2244,6 +2576,14 @@ void analyze(
   // clipped at the divider.
   const comparing =
     viewMode === "compare" && !!painted;
+
+  // The brush draws in Erase mode and in Adjust area.
+  const brushActive =
+    selectionMode === "erase" ||
+    (selectionMode === "area" && areaTool === "brush");
+
+  const areaColor =
+    areaOp === "add" ? "#34c759" : "#ff3b30";
 
   // Where the photo sits inside the letterboxed image
   // element; recomputed on every render (dragging and
@@ -2649,6 +2989,38 @@ void analyze(
                 </p>
               )}
 
+              <div className="surface-tools">
+                <button
+                  type="button"
+                  className={
+                    selectionMode === 'area'
+                      ? 'active'
+                      : ''
+                  }
+                  onClick={() =>
+                    selectionMode === 'area'
+                      ? stopAreaEdit()
+                      : startAreaEdit()
+                  }
+                  disabled={busy}
+                >
+                  {selectionMode === 'area'
+                    ? 'Adjusting area…'
+                    : 'Adjust area'}
+                </button>
+
+                <button
+                  type="button"
+                  className="danger"
+                  onClick={() =>
+                    deleteSurface(selectedSurface)
+                  }
+                  disabled={busy}
+                >
+                  Delete surface
+                </button>
+              </div>
+
               <input
                 className="shade-search"
                 type="text"
@@ -2971,7 +3343,8 @@ void analyze(
                 </button>
               )}
 
-            {polygonPoints.length > 0 && (
+            {selectionMode === 'polygon' &&
+              polygonPoints.length > 0 && (
               <button
                 type="button"
                 onClick={clearPolygon}
@@ -2981,6 +3354,147 @@ void analyze(
               </button>
             )}
           </div>
+
+          {selectionMode === 'area' && selectedSurface && (
+            <div className="area-controls">
+              <div className="area-title">
+                ADJUST AREA ·{' '}
+                {surfaceNames.get(selectedSurface)}
+              </div>
+
+              <div className="area-row">
+                <div className="segmented">
+                  <button
+                    type="button"
+                    className={areaOp === 'add' ? 'active' : ''}
+                    onClick={() => setAreaOp('add')}
+                    disabled={busy}
+                  >
+                    + Add
+                  </button>
+
+                  <button
+                    type="button"
+                    className={areaOp === 'remove' ? 'active' : ''}
+                    onClick={() => setAreaOp('remove')}
+                    disabled={busy}
+                  >
+                    − Remove
+                  </button>
+                </div>
+
+                <div className="segmented">
+                  <button
+                    type="button"
+                    className={areaTool === 'brush' ? 'active' : ''}
+                    onClick={() => {
+                      setAreaTool('brush');
+                      setPolygonPoints([]);
+                      setIsDrawingPolygon(false);
+                    }}
+                    disabled={busy}
+                  >
+                    Brush
+                  </button>
+
+                  <button
+                    type="button"
+                    className={areaTool === 'polygon' ? 'active' : ''}
+                    onClick={() => {
+                      setAreaTool('polygon');
+                      setAreaStrokes([]);
+                    }}
+                    disabled={busy}
+                  >
+                    Polygon
+                  </button>
+                </div>
+
+                {areaTool === 'brush' && (
+                  <label className="brush-size">
+                    Size
+
+                    <input
+                      type="range"
+                      min={6}
+                      max={120}
+                      value={brushSize}
+                      onChange={(e) =>
+                        setBrushSize(
+                          Number(e.target.value)
+                        )
+                      }
+                      disabled={busy}
+                    />
+                  </label>
+                )}
+              </div>
+
+              <div className="area-row">
+                <button
+                  type="button"
+                  className="area-apply"
+                  onClick={() => editArea(areaOp)}
+                  disabled={
+                    busy ||
+                    (areaTool === 'polygon'
+                      ? polygonPoints.length < 3
+                      : areaStrokes.length === 0)
+                  }
+                >
+                  {areaOp === 'add'
+                    ? 'Apply: add area'
+                    : 'Apply: remove area'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => editArea('undo')}
+                  disabled={
+                    busy ||
+                    !undoableSurfaces.has(selectedSurface)
+                  }
+                >
+                  Undo last change
+                </button>
+
+                {(areaStrokes.length > 0 ||
+                  polygonPoints.length > 0) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAreaStrokes([]);
+                      setPolygonPoints([]);
+                      setIsDrawingPolygon(false);
+                    }}
+                    disabled={busy}
+                  >
+                    Clear
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    stopAreaEdit();
+                    setMessage('Done adjusting the area.');
+                  }}
+                  disabled={busy}
+                >
+                  Done
+                </button>
+              </div>
+
+              <p className="area-hint">
+                {areaTool === 'brush'
+                  ? 'Paint over the part of the photo to '
+                  : 'Click around the part of the photo to '}
+                {areaOp === 'add'
+                  ? 'include in this surface.'
+                  : 'exclude from this surface.'}
+              </p>
+            </div>
+          )}
 
           {displayedImage ? (
 
@@ -3015,25 +3529,26 @@ void analyze(
   src={displayedImage}
   alt="Room visualization"
   className={
-    selectionMode === "erase"
+    brushActive
       ? "room-image erasing"
       : "room-image"
   }
   draggable={false}
   onClick={
-    selectionMode === "polygon"
+    selectionMode === "polygon" ||
+    (selectionMode === "area" && areaTool === "polygon")
       ? handlePolygonClick
       : selectionMode === "click"
         ? selectSurface
         : undefined
   }
   onPointerDown={
-    selectionMode === "erase"
+    brushActive
       ? startStroke
       : undefined
   }
   onPointerMove={
-    selectionMode === "erase"
+    brushActive
       ? continueStroke
       : undefined
   }
@@ -3123,7 +3638,8 @@ void analyze(
               
                
               {(polygonPoints.length > 0 ||
-                eraseStrokes.length > 0) &&
+                eraseStrokes.length > 0 ||
+                areaStrokes.length > 0) &&
                 imageRef.current && (
                   <svg
                     className="polygon-overlay"
@@ -3139,6 +3655,38 @@ void analyze(
                      * inside a translucent group so overlaps
                      * don't get darker.
                      */}
+                    {/* Area being added (green) or
+                        removed (red) in Adjust area. */}
+                    <g opacity={0.5}>
+                      {areaStrokes.map(
+                        (stroke, index) =>
+                          stroke.points.length === 1 ? (
+                            <circle
+                              key={index}
+                              cx={stroke.points[0].x}
+                              cy={stroke.points[0].y}
+                              r={stroke.width / 2}
+                              fill={areaColor}
+                            />
+                          ) : (
+                            <polyline
+                              key={index}
+                              points={stroke.points
+                                .map(
+                                  point =>
+                                    `${point.x},${point.y}`
+                                )
+                                .join(' ')}
+                              fill="none"
+                              stroke={areaColor}
+                              strokeWidth={stroke.width}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          )
+                      )}
+                    </g>
+
                     <g opacity={0.5}>
                       {eraseStrokes.map(
                         (stroke, index) =>
@@ -3177,8 +3725,21 @@ void analyze(
                               `${point.x},${point.y}`
                           )
                           .join(' ')}
-                        fill="rgba(255,255,255,0.15)"
-                        stroke="white"
+                        fill={
+                          selectionMode === 'area'
+                            ? areaColor
+                            : 'white'
+                        }
+                        fillOpacity={
+                          selectionMode === 'area'
+                            ? 0.35
+                            : 0.15
+                        }
+                        stroke={
+                          selectionMode === 'area'
+                            ? areaColor
+                            : 'white'
+                        }
                         strokeWidth="4"
                       />
                     )}
@@ -3192,7 +3753,11 @@ void analyze(
                           )
                           .join(' ')}
                         fill="none"
-                        stroke="white"
+                        stroke={
+                          selectionMode === 'area'
+                            ? areaColor
+                            : 'white'
+                        }
                         strokeWidth="4"
                       />
                     )}

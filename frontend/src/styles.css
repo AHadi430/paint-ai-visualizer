@@ -712,6 +712,96 @@ a.download.disabled {
   font-weight: 700;
 }
 
+/* Adjust area */
+.surface-tools {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.surface-tools button {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 12px;
+  background: #f7f5f0;
+  color: #171717;
+  border: 1px solid #d0cbc2;
+}
+
+.surface-tools button.active {
+  background: #171717;
+  color: white;
+  border-color: #171717;
+}
+
+.surface-tools button.danger {
+  margin-left: auto;
+  color: #b42318;
+}
+
+.area-controls {
+  margin: 0 12px 12px;
+  padding: 12px 14px;
+  background: #f7f5f0;
+  border: 1px solid #d0cbc2;
+  border-radius: 10px;
+}
+
+.area-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  margin-bottom: 10px;
+}
+
+.area-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.area-row button {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+.area-row .brush-size {
+  margin-top: 0;
+  font-size: 12px;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid #d0cbc2;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.segmented button {
+  border-radius: 0;
+  background: transparent;
+  color: #171717;
+}
+
+.segmented button.active {
+  background: #171717;
+  color: white;
+}
+
+.area-row button.area-apply {
+  background: #171717;
+  color: white;
+}
+
+.area-hint {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #777;
+}
+
 /* Before/after slider: stacked exactly on the main
    image (same box, same object-fit). */
 .compare-after,
