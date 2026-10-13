@@ -72,6 +72,20 @@ class TransferRequest(BaseModel):
     to_image_id: str
 
 
+class EditMaskRequest(BaseModel):
+    image_id: str
+    surface_id: str
+    # "add" / "remove" an area, or "undo" the last edit.
+    action: str
+    # The area, as a polygon and/or brush strokes.
+    polygon: list[list[float]] = []
+    strokes: list[EraseStroke] = []
+
+
+# Undo steps kept per surface.
+MAX_MASK_HISTORY = 20
+
+
 IMAGE_ID = re.compile(r"^[0-9a-f]{32}$")
 
 # Ids and names that end up in file paths must never
@@ -132,6 +146,100 @@ def _find_upload(image_id: str) -> Path:
         )
 
     return matches[0]
+
+
+def _clamp_points(
+    points: list[list[float]],
+    width: int,
+    height: int,
+) -> np.ndarray:
+
+    return np.array(
+        [
+            [
+                min(max(point[0], 0), width - 1),
+                min(max(point[1], 0), height - 1),
+            ]
+            for point in points
+            if len(point) >= 2
+        ],
+        dtype=np.int32,
+    ).reshape(-1, 2)
+
+
+def _rasterize_strokes(
+    strokes: list["EraseStroke"],
+    width: int,
+    height: int,
+) -> np.ndarray:
+    """
+    Brush strokes (polylines with a width, in image
+    pixels) as a 0/1 mask with round caps and joins.
+    """
+
+    mask = np.zeros(
+        (height, width),
+        dtype=np.uint8,
+    )
+
+    for stroke in strokes:
+
+        points = _clamp_points(
+            stroke.points,
+            width,
+            height,
+        )
+
+        if len(points) == 0:
+            continue
+
+        thickness = int(
+            min(max(stroke.width, 2), 400)
+        )
+
+        if len(points) > 1:
+            cv2.polylines(
+                mask,
+                [points],
+                isClosed=False,
+                color=1,
+                thickness=thickness,
+            )
+
+        for x, y in points:
+            cv2.circle(
+                mask,
+                (int(x), int(y)),
+                thickness // 2,
+                1,
+                -1,
+            )
+
+    return mask
+
+
+def _mask_history(mask_path: Path) -> list[Path]:
+    """
+    Earlier versions of a surface mask, oldest first,
+    stored as "<mask>~<n>.png" next to it for undo.
+    """
+
+    return sorted(
+        mask_path.parent.glob(f"{mask_path.stem}~*.png"),
+        key=lambda path: int(path.stem.rsplit("~", 1)[1]),
+    )
+
+
+def _mask_box(mask: np.ndarray) -> list[float]:
+
+    ys, xs = np.nonzero(mask)
+
+    return [
+        float(xs.min()),
+        float(ys.min()),
+        float(xs.max()),
+        float(ys.max()),
+    ]
 
 
 def _copy_surface_masks(
@@ -763,54 +871,11 @@ def clean_image(
         with Image.open(image_path) as image:
             width, height = image.size
 
-        # Rasterise the user's brush strokes.
-        brush_mask = np.zeros(
-            (height, width),
-            dtype=np.uint8,
+        brush_mask = _rasterize_strokes(
+            request.strokes,
+            width,
+            height,
         )
-
-        for stroke in request.strokes:
-
-            points = np.array(
-                [
-                    [
-                        min(max(x, 0), width - 1),
-                        min(max(y, 0), height - 1),
-                    ]
-                    for x, y in (
-                        point[:2]
-                        for point in stroke.points
-                        if len(point) >= 2
-                    )
-                ],
-                dtype=np.int32,
-            )
-
-            if len(points) == 0:
-                continue
-
-            thickness = int(
-                min(max(stroke.width, 2), 400)
-            )
-
-            if len(points) > 1:
-                cv2.polylines(
-                    brush_mask,
-                    [points],
-                    isClosed=False,
-                    color=1,
-                    thickness=thickness,
-                )
-
-            # Round caps and joins.
-            for x, y in points:
-                cv2.circle(
-                    brush_mask,
-                    (int(x), int(y)),
-                    thickness // 2,
-                    1,
-                    -1,
-                )
 
         new_id = uuid4().hex
 
@@ -875,6 +940,134 @@ def transfer_surfaces(
 
     return {
         "copied": copied,
+    }
+
+
+@router.post("/edit-mask")
+def edit_mask(
+    request: EditMaskRequest,
+):
+    """
+    Grow or shrink a surface by an area the user drew
+    (polygon or brush), or undo the last such edit.
+
+    The previous mask is kept as "<mask>~<n>.png" so
+    edits can be undone step by step.
+    """
+
+    _find_upload(request.image_id)
+    _check_surface_id(request.surface_id)
+
+    if request.action not in ("add", "remove", "undo"):
+        raise HTTPException(
+            status_code=400,
+            detail="action must be add, remove or undo.",
+        )
+
+    mask_path = (
+        Path(settings.output_dir)
+        / f"{request.image_id}_{request.surface_id}.png"
+    )
+
+    if not mask_path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="Surface not found.",
+        )
+
+    history = _mask_history(mask_path)
+
+    if request.action == "undo":
+
+        if not history:
+            raise HTTPException(
+                status_code=400,
+                detail="Nothing to undo for this surface.",
+            )
+
+        history[-1].replace(mask_path)
+
+        mask = np.array(
+            Image.open(mask_path).convert("L")
+        ) > 127
+
+    else:
+
+        mask = np.array(
+            Image.open(mask_path).convert("L")
+        ) > 127
+
+        height, width = mask.shape
+
+        area = _rasterize_strokes(
+            request.strokes,
+            width,
+            height,
+        )
+
+        polygon = _clamp_points(
+            request.polygon,
+            width,
+            height,
+        )
+
+        if len(polygon) >= 3:
+            cv2.fillPoly(area, [polygon], 1)
+
+        area = area.astype(bool)
+
+        if not area.any():
+            raise HTTPException(
+                status_code=400,
+                detail="Draw the area to add or remove first.",
+            )
+
+        edited = (
+            mask | area
+            if request.action == "add"
+            else mask & ~area
+        )
+
+        if edited.sum() < 100:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "That would remove (almost) the whole "
+                    "surface. Use Delete surface instead."
+                ),
+            )
+
+        # Keep the current mask for undo.
+        next_index = (
+            int(history[-1].stem.rsplit("~", 1)[1]) + 1
+            if history
+            else 1
+        )
+
+        shutil.copyfile(
+            mask_path,
+            mask_path.with_name(
+                f"{mask_path.stem}~{next_index}.png"
+            ),
+        )
+
+        for old in history[: max(0, len(history) + 1 - MAX_MASK_HISTORY)]:
+            old.unlink(missing_ok=True)
+
+        Image.fromarray(
+            edited.astype(np.uint8) * 255
+        ).save(mask_path)
+
+        mask = edited
+
+    return {
+        "surface_id": request.surface_id,
+        "mask_url": (
+            f"/api/visualizer/mask/{mask_path.name}"
+        ),
+        "box": _mask_box(mask),
+        "area_ratio": float(mask.mean()),
+        "can_undo": bool(_mask_history(mask_path)),
     }
 
 
