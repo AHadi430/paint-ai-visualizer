@@ -47,6 +47,27 @@ same Wi-Fi and open the **Network** address Vite prints (e.g.
 install it. The app forwards `/api` to the backend on this computer, so
 nothing else needs to be exposed.
 
+### iPhone app (Xcode)
+`app/ios/` is a native iOS app (Capacitor) around the same app. While
+testing, the iPhone app loads the app from this Mac's dev server over
+Wi-Fi, so code changes show up on the phone straight away.
+
+1. Start the backend, then `npm run dev` in `app/`.
+2. In `app/`, run `npm run ios`. It points the iPhone app at this Mac's
+   Wi-Fi address, syncs the Xcode project and opens it in Xcode.
+3. Connect the iPhone with a cable (or on the same Wi-Fi once paired),
+   unlock it, choose it at the top of Xcode and press **Run**.
+4. First time only, on the iPhone:
+   - Settings → Privacy & Security → **Developer Mode** → on (restarts the
+     phone).
+   - Settings → General → VPN & Device Management → trust the developer
+     app.
+   - Allow **Local Network** access when Paint AI asks.
+
+Apps signed with a free Apple account stop opening after 7 days; press Run
+in Xcode again to renew. If the Mac's Wi-Fi address changes, run
+`npm run ios` again.
+
 ## Setup
 
 ### 1. Model weights
