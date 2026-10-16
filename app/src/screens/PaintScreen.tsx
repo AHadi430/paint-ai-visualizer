@@ -11,8 +11,10 @@ import {
 } from '../components/Icons';
 import { PhotoButtons, PhotoEmptyState } from '../components/PhotoPicker';
 import { PhotoStage } from '../components/PhotoStage';
+import { ScreenHeader } from '../components/ScreenHeader';
 import { ShadePicker } from '../components/ShadePicker';
 import { Sheet } from '../components/Sheet';
+import { successFeedback, tapFeedback } from '../lib/haptics';
 import { highlightUrl, maskContains } from '../lib/mask';
 import { shareOrSave } from '../lib/share';
 import type { Photo, Point, Shade, Wall } from '../types';
@@ -26,6 +28,7 @@ type Props = {
   /** Shade chosen elsewhere ("Try on my wall"), applied to the next wall. */
   pendingShade?: Shade;
   onPendingUsed: () => void;
+  onHome: () => void;
   notify: (message: string) => void;
 };
 
@@ -37,6 +40,7 @@ export function PaintScreen({
   favorites,
   pendingShade,
   onPendingUsed,
+  onHome,
   notify,
 }: Props) {
   const [walls, setWalls] = useState<Wall[]>([]);
@@ -129,6 +133,10 @@ export function PaintScreen({
       await rerender(next);
       setHistory((previous) => [...previous, base]);
       setWalls(next);
+
+      if (shade) {
+        successFeedback();
+      }
     } catch (error) {
       notify(error instanceof Error ? error.message : 'Could not paint the wall.');
     } finally {
@@ -140,6 +148,8 @@ export function PaintScreen({
     if (!photo || busy) {
       return;
     }
+
+    tapFeedback();
 
     // Tapping a wall that was already found selects it again.
     for (const wall of [...walls].reverse()) {
@@ -229,7 +239,7 @@ export function PaintScreen({
   if (!photo) {
     return (
       <div className="screen-content">
-        <Header />
+        <Header onHome={onHome} />
 
         {pendingShade && (
           <PendingBanner shade={pendingShade} onClear={onPendingUsed} />
@@ -256,7 +266,7 @@ export function PaintScreen({
 
   return (
     <div className={sheetOpen ? 'screen-content with-sheet' : 'screen-content'}>
-      <Header>
+      <Header onHome={onHome}>
         <button
           type="button"
           className="icon-btn"
@@ -404,15 +414,17 @@ export function PaintScreen({
   );
 }
 
-function Header({ children }: { children?: ReactNode }) {
+function Header({
+  onHome,
+  children,
+}: {
+  onHome: () => void;
+  children?: ReactNode;
+}) {
   return (
-    <header className="topbar">
-      <div>
-        <span className="brand">PAINT AI</span>
-        <h1>Paint</h1>
-      </div>
-      <div className="actions">{children}</div>
-    </header>
+    <ScreenHeader title="Paint" subtitle="Tap a wall to paint it" onHome={onHome}>
+      {children}
+    </ScreenHeader>
   );
 }
 

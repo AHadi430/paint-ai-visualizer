@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { HeartIcon, RollerIcon } from '../components/Icons';
+import { ScreenHeader } from '../components/ScreenHeader';
 import { ShadePicker } from '../components/ShadePicker';
 import { Sheet } from '../components/Sheet';
 import { readableOn } from '../lib/color';
+import { tapFeedback } from '../lib/haptics';
 import { copyText } from '../lib/share';
 import type { Shade } from '../types';
 
@@ -11,6 +13,7 @@ type Props = {
   favorites: Set<string>;
   onToggleFavorite: (code: string) => void;
   onTry: (shade: Shade) => void;
+  onHome: () => void;
   notify: (message: string) => void;
 };
 
@@ -20,24 +23,26 @@ export function ShadesScreen({
   favorites,
   onToggleFavorite,
   onTry,
+  onHome,
   notify,
 }: Props) {
   const [detail, setDetail] = useState<Shade>();
 
   return (
     <div className="screen-content">
-      <header className="topbar">
-        <div>
-          <span className="brand">PAINT AI</span>
-          <h1>Shade card</h1>
-        </div>
-        <span className="count">{shades.length} shades</span>
-      </header>
+      <ScreenHeader
+        title="Shade card"
+        subtitle={shades.length ? `${shades.length} colours to explore` : undefined}
+        onHome={onHome}
+      />
 
       <ShadePicker
         shades={shades}
         favorites={favorites}
-        onPick={setDetail}
+        onPick={(shade) => {
+          tapFeedback();
+          setDetail(shade);
+        }}
         columns={3}
       />
 

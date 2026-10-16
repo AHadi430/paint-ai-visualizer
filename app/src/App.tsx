@@ -1,22 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getShades, uploadPhoto } from './api';
-import { PipetteIcon, RollerIcon, SwatchesIcon } from './components/Icons';
 import { useFavorites } from './lib/favorites';
+import { HomeScreen, type Section } from './screens/HomeScreen';
 import { IdentifyScreen } from './screens/IdentifyScreen';
 import { PaintScreen } from './screens/PaintScreen';
 import { ShadesScreen } from './screens/ShadesScreen';
 import type { Photo, Shade } from './types';
 
-type Tab = 'paint' | 'identify' | 'shades';
-
-const TABS: { id: Tab; label: string; icon: typeof RollerIcon }[] = [
-  { id: 'paint', label: 'Paint', icon: RollerIcon },
-  { id: 'identify', label: 'Identify', icon: PipetteIcon },
-  { id: 'shades', label: 'Shades', icon: SwatchesIcon },
-];
+type Screen = 'home' | Section;
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>('paint');
+  const [screen, setScreen] = useState<Screen>('home');
   const [shades, setShades] = useState<Shade[]>([]);
   const { favorites, toggle: toggleFavorite } = useFavorites();
 
@@ -35,6 +29,13 @@ export default function App() {
     clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(undefined), 3200);
   }, []);
+
+  const goTo = useCallback((next: Screen) => {
+    setScreen(next);
+    window.scrollTo({ top: 0 });
+  }, []);
+
+  const goHome = useCallback(() => goTo('home'), [goTo]);
 
   // The shade card. Retries while the backend is starting up.
   useEffect(() => {
@@ -78,7 +79,7 @@ export default function App() {
 
   function tryShade(shade: Shade) {
     setPendingShade(shade);
-    setTab('paint');
+    goTo('paint');
 
     notify(
       photo
@@ -89,8 +90,18 @@ export default function App() {
 
   return (
     <div className="app">
-      {/* All screens stay mounted so switching tabs keeps their work. */}
-      <main className="screen" hidden={tab !== 'paint'}>
+      <main className="screen theme-home" hidden={screen !== 'home'}>
+        <HomeScreen
+          shades={shades}
+          favoriteCount={favorites.size}
+          photo={photo}
+          onOpen={goTo}
+          onTry={tryShade}
+        />
+      </main>
+
+      {/* Sections stay mounted so going Home keeps their work. */}
+      <main className="screen theme-paint" hidden={screen !== 'paint'}>
         <PaintScreen
           photo={photo}
           uploading={uploading}
@@ -99,11 +110,12 @@ export default function App() {
           favorites={favorites}
           pendingShade={pendingShade}
           onPendingUsed={() => setPendingShade(undefined)}
+          onHome={goHome}
           notify={notify}
         />
       </main>
 
-      <main className="screen" hidden={tab !== 'identify'}>
+      <main className="screen theme-identify" hidden={screen !== 'identify'}>
         <IdentifyScreen
           photo={photo}
           uploading={uploading}
@@ -111,34 +123,21 @@ export default function App() {
           favorites={favorites}
           onToggleFavorite={toggleFavorite}
           onTry={tryShade}
+          onHome={goHome}
           notify={notify}
         />
       </main>
 
-      <main className="screen" hidden={tab !== 'shades'}>
+      <main className="screen theme-shades" hidden={screen !== 'shades'}>
         <ShadesScreen
           shades={shades}
           favorites={favorites}
           onToggleFavorite={toggleFavorite}
           onTry={tryShade}
+          onHome={goHome}
           notify={notify}
         />
       </main>
-
-      <nav className="tabbar" aria-label="Main">
-        {TABS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            className={tab === id ? 'tab active' : 'tab'}
-            aria-current={tab === id ? 'page' : undefined}
-            onClick={() => setTab(id)}
-          >
-            <Icon size={24} />
-            {label}
-          </button>
-        ))}
-      </nav>
 
       {uploading && (
         <div className="fullscreen-busy">

@@ -4,7 +4,9 @@ import { ColorReportCard } from '../components/ColorReportCard';
 import { CameraIcon, PipetteIcon, SparkleIcon, TapIcon } from '../components/Icons';
 import { PhotoButtons, PhotoEmptyState } from '../components/PhotoPicker';
 import { PhotoStage } from '../components/PhotoStage';
+import { ScreenHeader } from '../components/ScreenHeader';
 import { Sheet } from '../components/Sheet';
+import { successFeedback, tapFeedback } from '../lib/haptics';
 import { highlightUrl } from '../lib/mask';
 import { copyText } from '../lib/share';
 import type { ColorReport, PaletteColor, Photo, Point, Shade } from '../types';
@@ -16,6 +18,7 @@ type Props = {
   favorites: Set<string>;
   onToggleFavorite: (code: string) => void;
   onTry: (shade: Shade) => void;
+  onHome: () => void;
   notify: (message: string) => void;
 };
 
@@ -32,6 +35,7 @@ export function IdentifyScreen({
   favorites,
   onToggleFavorite,
   onTry,
+  onHome,
   notify,
 }: Props) {
   const [mode, setMode] = useState<'surface' | 'point'>('surface');
@@ -79,6 +83,7 @@ export function IdentifyScreen({
       return;
     }
 
+    tapFeedback();
     setMarker(percent);
     setHighlight(undefined);
     setBusy(mode === 'surface' ? 'Finding the surface…' : 'Reading the colour…');
@@ -92,6 +97,8 @@ export function IdentifyScreen({
           result.mode === 'surface' ? 'Surface you tapped' : 'Spot you tapped',
         unevenLighting: result.uneven_lighting,
       });
+
+      successFeedback();
 
       if (result.mask_url) {
         setHighlight(
@@ -121,13 +128,13 @@ export function IdentifyScreen({
   }
 
   const header = (actions?: ReactNode) => (
-    <header className="topbar">
-      <div>
-        <span className="brand">PAINT AI</span>
-        <h1>Identify colour</h1>
-      </div>
-      <div className="actions">{actions}</div>
-    </header>
+    <ScreenHeader
+      title="Identify colour"
+      subtitle="Find any colour in a photo"
+      onHome={onHome}
+    >
+      {actions}
+    </ScreenHeader>
   );
 
   if (!photo) {

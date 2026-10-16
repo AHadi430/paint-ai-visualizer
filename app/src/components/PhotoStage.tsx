@@ -40,6 +40,10 @@ export function PhotoStage({
   const dragging = useRef(false);
   const [split, setSplit] = useState(50);
 
+  // Expanding rings where the photo was tapped.
+  const [ripples, setRipples] = useState<(Point & { id: number })[]>([]);
+  const rippleId = useRef(0);
+
   const handleClick = (event: MouseEvent<HTMLImageElement>) => {
     const img = image.current;
 
@@ -51,6 +55,14 @@ export function PhotoStage({
 
     const fx = (event.clientX - rect.left) / rect.width;
     const fy = (event.clientY - rect.top) / rect.height;
+
+    const id = ++rippleId.current;
+
+    setRipples((list) => [...list, { id, x: fx * 100, y: fy * 100 }]);
+    setTimeout(
+      () => setRipples((list) => list.filter((ripple) => ripple.id !== id)),
+      700
+    );
 
     onTap(
       { x: fx * img.naturalWidth, y: fy * img.naturalHeight },
@@ -97,6 +109,14 @@ export function PhotoStage({
         />
 
         {!compareSrc && children}
+
+        {ripples.map((ripple) => (
+          <span
+            key={ripple.id}
+            className="ripple"
+            style={{ left: `${ripple.x}%`, top: `${ripple.y}%` }}
+          />
+        ))}
 
         {compareSrc && (
           <>
