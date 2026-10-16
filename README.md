@@ -17,6 +17,36 @@ preserved.
 
 Stack: React + TypeScript (Vite) frontend, FastAPI backend, PyTorch models.
 
+## Project layout
+
+| Folder | What it is |
+|---|---|
+| `frontend/` | The full visualizer website (detailed tools: polygons, clean render, area editing) |
+| `app/` | The customer app: a simple, phone-first app installable to the home screen |
+| `backend/` | The shared AI backend used by both |
+
+### Customer app
+Three tabs:
+- **Paint**: take or choose a photo, tap a wall, pick a shade; undo,
+  before/after, and share or save the result.
+- **Identify**: tap any colour in a photo. The AI finds the surface and
+  reports its colour (name, hex/RGB, warm/cool, light/dark) and the
+  closest shades from the shade card, plus the photo's main colours.
+- **Shades**: browse and search the shade card, save favourites and try
+  any shade on a wall.
+
+Run it (with the backend running):
+```bash
+cd app
+npm install
+npm run dev
+```
+Open http://localhost:5174. To try it on a phone, connect the phone to the
+same Wi-Fi and open the **Network** address Vite prints (e.g.
+`http://192.168.1.44:5174`); in Safari use *Share → Add to Home Screen* to
+install it. The app forwards `/api` to the backend on this computer, so
+nothing else needs to be exposed.
+
 ## Setup
 
 ### 1. Model weights
