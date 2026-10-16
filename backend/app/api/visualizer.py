@@ -24,6 +24,7 @@ from ..services.image_service import (
 )
 from ..ai.sam import sam_service
 from ..services.clean_service import clean_service
+from ..services import color_service
 
 
 router = APIRouter(
@@ -80,6 +81,19 @@ class EditMaskRequest(BaseModel):
     # The area, as a polygon and/or brush strokes.
     polygon: list[list[float]] = []
     strokes: list[EraseStroke] = []
+
+
+class IdentifyColorRequest(BaseModel):
+    image_id: str
+    x: float
+    y: float
+    # "surface": the whole surface under the tap (AI);
+    # "point": just the small area around the tap.
+    mode: str = "surface"
+
+
+class PaletteRequest(BaseModel):
+    image_id: str
 
 
 # Undo steps kept per surface.
@@ -242,6 +256,29 @@ def _mask_box(mask: np.ndarray) -> list[float]:
     ]
 
 
+def _load_shades() -> list[dict]:
+
+    if not SHADE_FILE.exists():
+        raise HTTPException(
+            500,
+            "Shade library not found.",
+        )
+
+    try:
+        with open(
+            SHADE_FILE,
+            "r",
+            encoding="utf-8",
+        ) as file:
+            return json.load(file)
+
+    except Exception as exc:
+        raise HTTPException(
+            500,
+            f"Could not load shade library: {exc}",
+        )
+
+
 def _copy_surface_masks(
     from_id: str,
     to_id: str,
@@ -274,25 +311,7 @@ def _copy_surface_masks(
 
 @router.get("/shades")
 def get_shades():
-    if not SHADE_FILE.exists():
-        raise HTTPException(
-            500,
-            "Shade library not found.",
-        )
-
-    try:
-        with open(
-            SHADE_FILE,
-            "r",
-            encoding="utf-8",
-        ) as file:
-            shades = json.load(file)
-
-    except Exception as exc:
-        raise HTTPException(
-            500,
-            f"Could not load shade library: {exc}",
-        )
+    shades = _load_shades()
 
     return {
         "count": len(shades),
@@ -940,6 +959,111 @@ def transfer_surfaces(
 
     return {
         "copied": copied,
+    }
+
+
+@router.post("/identify-color")
+def identify_color(
+    request: IdentifyColorRequest,
+):
+    """
+    Colour picker: what colour is the surface (or spot) the user
+    tapped, in words, and which shade-card colours match it best.
+
+    In "surface" mode SAM finds the whole surface under the tap
+    and its typical colour is used, so one dark pixel or a shadow
+    doesn't decide the answer.
+    """
+
+    image_path = _find_upload(request.image_id)
+
+    if request.mode not in ("surface", "point"):
+        raise HTTPException(
+            status_code=400,
+            detail="mode must be surface or point.",
+        )
+
+    image = np.array(
+        Image.open(image_path).convert("RGB")
+    )
+
+    height, width = image.shape[:2]
+
+    x = int(min(max(request.x, 0), width - 1))
+    y = int(min(max(request.y, 0), height - 1))
+
+    region = None
+    mask_url = None
+
+    if request.mode == "surface":
+        try:
+            mask, _ = sam_service.segment_from_point(
+                str(image_path),
+                x,
+                y,
+            )
+
+            if mask.sum() >= 200:
+                region = mask
+
+        except Exception as exc:
+            print("Colour picker segmentation failed:", exc)
+
+    if region is None:
+        # A small disc around the tap.
+        radius = max(4, int(max(height, width) * 0.008))
+
+        ys, xs = np.ogrid[:height, :width]
+        region = (xs - x) ** 2 + (ys - y) ** 2 <= radius ** 2
+
+    else:
+        mask_name = f"{request.image_id}_picked.png"
+
+        Image.fromarray(
+            region.astype(np.uint8) * 255
+        ).save(Path(settings.output_dir) / mask_name)
+
+        mask_url = f"/api/visualizer/mask/{mask_name}"
+
+    lab, lightness_spread = color_service.representative_lab(
+        image[region]
+    )
+
+    return {
+        **color_service.color_report(lab, _load_shades()),
+        "mode": "surface" if mask_url else "point",
+        "mask_url": mask_url,
+        "coverage": round(float(region.mean()), 4),
+        # Strong light/shadow across the surface means the
+        # reading is an average and less reliable.
+        "uneven_lighting": lightness_spread > 12,
+    }
+
+
+@router.post("/palette")
+def photo_palette(
+    request: PaletteRequest,
+):
+    """
+    The main colours in a photo, each matched to the shade card.
+    """
+
+    image_path = _find_upload(request.image_id)
+
+    image = np.array(
+        Image.open(image_path).convert("RGB")
+    )
+
+    shades = _load_shades()
+
+    return {
+        "colors": [
+            {
+                **color_service.color_report(lab, shades),
+                "share": round(share, 3),
+            }
+            for lab, share in color_service.dominant_colors(image)
+        ],
     }
 
 
