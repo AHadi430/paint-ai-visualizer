@@ -106,6 +106,7 @@ export default function App() {
           photo={photo}
           uploading={uploading}
           onPickPhoto={pickPhoto}
+          onPhotoReplaced={setPhoto}
           shades={shades}
           favorites={favorites}
           pendingShade={pendingShade}
