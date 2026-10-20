@@ -25,6 +25,7 @@ from ..services.image_service import (
 from ..ai.sam import sam_service
 from ..services.clean_service import clean_service
 from ..services import color_service
+from ..services.mask_refine import refine_mask
 
 
 router = APIRouter(
@@ -109,6 +110,12 @@ SURFACE_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 SAFE_FILENAME = re.compile(
     r"^[A-Za-z0-9_-]{1,128}\.(png|jpg|jpeg|webp)$"
 )
+
+# Colour-scheme name for rendered variants.
+VARIANT = re.compile(r"^[a-z0-9]{1,8}$")
+
+# Rendered results: <id>_painted.png and <id>_painted_<variant>.png.
+PAINTED_FILE = re.compile(r"_painted(_[a-z0-9]{1,8})?\.png$")
 
 # Per-image files that are NOT surface masks.
 NON_MASK_SUFFIXES = (
@@ -294,7 +301,10 @@ def _copy_surface_masks(
 
     for path in output_dir.glob(f"{from_id}_*.png"):
 
-        if path.name.endswith(NON_MASK_SUFFIXES):
+        if (
+            path.name.endswith(NON_MASK_SUFFIXES)
+            or PAINTED_FILE.search(path.name)
+        ):
             continue
 
         suffix = path.name[len(from_id):]
@@ -706,6 +716,12 @@ def segment_image(
             )
         )
 
+        # Smoother outline that follows the wall's edges.
+        mask = refine_mask(
+            mask,
+            np.array(Image.open(image_path).convert("RGB")),
+        )
+
     except Exception as exc:
         raise HTTPException(
             500,
@@ -789,8 +805,23 @@ def recolor_image(payload: dict):
 
     image_path = _find_upload(image_id)
 
+    # Optional variant ("a", "b", ...) so several colour
+    # schemes for the same photo can exist side by side.
+    variant = payload.get("variant")
+
+    if variant is not None and (
+        not isinstance(variant, str)
+        or not VARIANT.match(variant)
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid variant.",
+        )
+
     output_filename = (
-        f"{image_id}_painted.png"
+        f"{image_id}_painted_{variant}.png"
+        if variant
+        else f"{image_id}_painted.png"
     )
 
     output_path = (
@@ -1224,7 +1255,7 @@ def get_image(
             # attribute is ignored cross-origin.
             label = (
                 "painted"
-                if path.stem.endswith("_painted")
+                if PAINTED_FILE.search(path.name)
                 else "image"
             )
 
