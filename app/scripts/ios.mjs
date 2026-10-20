@@ -1,10 +1,12 @@
 // Prepare the iOS app for testing on an iPhone and open it in Xcode.
 //
-//   npm run ios
+//   npm run ios            the phone loads the production build
+//                          (fast; serve it with `npm run phone`)
+//   npm run ios -- --dev   the phone loads the dev server instead
+//                          (live reload while editing; slower)
 //
-// Points the native app at this computer's dev server (Wi-Fi address,
-// port 5174), syncs the Xcode project and opens it. Keep `npm run dev`
-// (and the backend) running while you use the app on the phone.
+// Points the native app at this computer's Wi-Fi address, syncs the
+// Xcode project and opens it.
 
 import { execSync } from 'node:child_process';
 import { networkInterfaces } from 'node:os';
@@ -34,7 +36,9 @@ if (!address) {
   process.exit(1);
 }
 
-const serverUrl = `http://${address}:5174`;
+const dev = process.argv.includes('--dev');
+const port = dev ? 5174 : 4174;
+const serverUrl = `http://${address}:${port}`;
 
 const run = (command, env = {}) =>
   execSync(command, { stdio: 'inherit', env: { ...process.env, ...env } });
@@ -47,7 +51,7 @@ run('npx cap sync ios', { CAP_SERVER_URL: serverUrl });
 console.log(`
 The iPhone app will load ${serverUrl}
 
-1. Keep the backend and \`npm run dev\` (in app/) running.
+1. Keep the backend and \`${dev ? 'npm run dev' : 'npm run phone'}\` (in app/) running.
 2. Connect your iPhone to this Mac (cable or same Wi-Fi) and unlock it.
 3. In Xcode: choose your iPhone at the top, then press Run (▶).
    First time only: Signing & Capabilities → Team → your Apple ID.

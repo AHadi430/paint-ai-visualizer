@@ -49,12 +49,14 @@ nothing else needs to be exposed.
 
 ### iPhone app (Xcode)
 `app/ios/` is a native iOS app (Capacitor) around the same app. While
-testing, the iPhone app loads the app from this Mac's dev server over
-Wi-Fi, so code changes show up on the phone straight away.
+testing, the iPhone app loads the app from this Mac over Wi-Fi.
 
-1. Start the backend, then `npm run dev` in `app/`.
+1. Start the backend, then `npm run phone` in `app/` (builds the app and
+   serves the fast production version on port 4174).
 2. In `app/`, run `npm run ios`. It points the iPhone app at this Mac's
    Wi-Fi address, syncs the Xcode project and opens it in Xcode.
+   (`npm run ios -- --dev` uses the dev server instead: code changes show
+   up live, but the app is slower.)
 3. Connect the iPhone with a cable (or on the same Wi-Fi once paired),
    unlock it, choose it at the top of Xcode and press **Run**.
 4. First time only, on the iPhone:
