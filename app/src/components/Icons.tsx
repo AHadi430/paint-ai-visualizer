@@ -134,6 +134,36 @@ export const ArrowIcon = (p: IconProps) => (
   </Icon>
 );
 
+export const BrushIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M18.4 2.6a2 2 0 0 1 2.9 2.9L12 14.8 9.2 12z" />
+    <path d="M9.2 12C6 12 5 14 5 16.5S3 20 3 20s4 1 6.5-.5S12 17 12 14.8" />
+  </Icon>
+);
+
+export const EraserIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="m7 21-4-4a2 2 0 0 1 0-2.8L13.2 4a2 2 0 0 1 2.8 0l4.9 4.9a2 2 0 0 1 0 2.8L11.5 21" />
+    <path d="M7 21h14" />
+    <path d="m8.5 8.5 7 7" />
+  </Icon>
+);
+
+export const PlusIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M12 5v14M5 12h14" />
+  </Icon>
+);
+
+export const TrashIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 7h16" />
+    <path d="M10 11v6M14 11v6" />
+    <path d="M6 7l1 13h10l1-13" />
+    <path d="M9 7V4h6v3" />
+  </Icon>
+);
+
 export const SparkleIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M12 3v4M12 17v4M3 12h4M17 12h4" />

@@ -6,7 +6,7 @@ import {
   type PointerEvent,
   type ReactNode,
 } from 'react';
-import type { Point } from '../types';
+import type { Point, Stroke } from '../types';
 
 type Props = {
   src: string;
@@ -19,6 +19,16 @@ type Props = {
   /** Show a before/after slider with this image as "before". */
   compareSrc?: string;
   busyLabel?: string;
+  /**
+   * Brush mode: strokes are drawn on the photo instead of taps.
+   * Brush size is in screen pixels, strokes are in photo pixels.
+   */
+  brush?: {
+    strokes: Stroke[];
+    onChange: (strokes: Stroke[]) => void;
+    color: string;
+    size: number;
+  };
   /** Overlays drawn exactly over the photo (absolutely positioned). */
   children?: ReactNode;
 };
@@ -34,20 +44,27 @@ export function PhotoStage({
   onTap,
   compareSrc,
   busyLabel,
+  brush,
   children,
 }: Props) {
   const image = useRef<HTMLImageElement>(null);
   const dragging = useRef(false);
+  const drawing = useRef(false);
   const [split, setSplit] = useState(50);
+  const [natural, setNatural] = useState({ width: 0, height: 0 });
 
   // Expanding rings where the photo was tapped.
   const [ripples, setRipples] = useState<(Point & { id: number })[]>([]);
   const rippleId = useRef(0);
 
+  // Strokes as they are being drawn (props update a frame later).
+  const liveStrokes = useRef<Stroke[]>([]);
+  liveStrokes.current = brush?.strokes ?? [];
+
   const handleClick = (event: MouseEvent<HTMLImageElement>) => {
     const img = image.current;
 
-    if (!onTap || !img || !img.naturalWidth || busyLabel) {
+    if (!onTap || !img || !img.naturalWidth || busyLabel || brush) {
       return;
     }
 
@@ -68,6 +85,82 @@ export function PhotoStage({
       { x: fx * img.naturalWidth, y: fy * img.naturalHeight },
       { x: fx * 100, y: fy * 100 }
     );
+  };
+
+  /** Screen position to photo pixels, plus the screen-to-photo scale. */
+  const toPhoto = (clientX: number, clientY: number) => {
+    const img = image.current;
+
+    if (!img || !img.naturalWidth) {
+      return null;
+    }
+
+    const rect = img.getBoundingClientRect();
+    const scale = img.naturalWidth / rect.width;
+
+    return {
+      point: {
+        x: Math.min(img.naturalWidth - 1, Math.max(0, (clientX - rect.left) * scale)),
+        y: Math.min(img.naturalHeight - 1, Math.max(0, (clientY - rect.top) * scale)),
+      },
+      scale,
+    };
+  };
+
+  const startStroke = (event: PointerEvent<HTMLDivElement>) => {
+    if (!brush || busyLabel) {
+      return;
+    }
+
+    const hit = toPhoto(event.clientX, event.clientY);
+
+    if (!hit) {
+      return;
+    }
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drawing.current = true;
+
+    const next = [
+      ...liveStrokes.current,
+      { points: [hit.point], width: brush.size * hit.scale },
+    ];
+
+    liveStrokes.current = next;
+    brush.onChange(next);
+  };
+
+  const continueStroke = (event: PointerEvent<HTMLDivElement>) => {
+    if (!brush || !drawing.current) {
+      return;
+    }
+
+    const hit = toPhoto(event.clientX, event.clientY);
+    const strokes = liveStrokes.current;
+    const last = strokes[strokes.length - 1];
+
+    if (!hit || !last) {
+      return;
+    }
+
+    const previous = last.points[last.points.length - 1];
+
+    // Skip points that barely moved on screen.
+    if (
+      Math.hypot(hit.point.x - previous.x, hit.point.y - previous.y) <
+      3 * hit.scale
+    ) {
+      return;
+    }
+
+    const next = [
+      ...strokes.slice(0, -1),
+      { ...last, points: [...last.points, hit.point] },
+    ];
+
+    liveStrokes.current = next;
+    brush.onChange(next);
   };
 
   const moveSplit = (clientX: number) => {
@@ -105,7 +198,13 @@ export function PhotoStage({
           alt={alt}
           draggable={false}
           onClick={handleClick}
-          className={onTap && !compareSrc ? 'tappable' : undefined}
+          onLoad={(event) =>
+            setNatural({
+              width: event.currentTarget.naturalWidth,
+              height: event.currentTarget.naturalHeight,
+            })
+          }
+          className={onTap && !compareSrc && !brush ? 'tappable' : undefined}
         />
 
         {!compareSrc && children}
@@ -117,6 +216,51 @@ export function PhotoStage({
             style={{ left: `${ripple.x}%`, top: `${ripple.y}%` }}
           />
         ))}
+
+        {brush && natural.width > 0 && (
+          <>
+            <svg
+              className="brush-strokes"
+              viewBox={`0 0 ${natural.width} ${natural.height}`}
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            >
+              {/* Opaque strokes in a translucent group: overlaps
+                  don't get darker. */}
+              <g opacity={0.55}>
+                {brush.strokes.map((stroke, index) =>
+                  stroke.points.length === 1 ? (
+                    <circle
+                      key={index}
+                      cx={stroke.points[0].x}
+                      cy={stroke.points[0].y}
+                      r={stroke.width / 2}
+                      fill={brush.color}
+                    />
+                  ) : (
+                    <polyline
+                      key={index}
+                      points={stroke.points.map((p) => `${p.x},${p.y}`).join(' ')}
+                      fill="none"
+                      stroke={brush.color}
+                      strokeWidth={stroke.width}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  )
+                )}
+              </g>
+            </svg>
+
+            <div
+              className="brush-hit"
+              onPointerDown={startStroke}
+              onPointerMove={continueStroke}
+              onPointerUp={() => (drawing.current = false)}
+              onPointerCancel={() => (drawing.current = false)}
+            />
+          </>
+        )}
 
         {compareSrc && (
           <>
