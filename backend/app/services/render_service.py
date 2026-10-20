@@ -228,15 +228,32 @@ class RenderService:
                 color
             )
 
-            result = self.recolor_surface(
-                result,
-                mask,
+            # Only process the surface's own area (plus a margin
+            # for the blurs): much faster than the whole photo.
+            ys, xs = np.nonzero(mask > 0.01)
+
+            if len(xs) == 0:
+                continue
+
+            margin = 12
+            y1 = max(0, ys.min() - margin)
+            y2 = min(result.shape[0], ys.max() + 1 + margin)
+            x1 = max(0, xs.min() - margin)
+            x2 = min(result.shape[1], xs.max() + 1 + margin)
+
+            result[y1:y2, x1:x2] = self.recolor_surface(
+                result[y1:y2, x1:x2],
+                mask[y1:y2, x1:x2],
                 target_rgb,
             )
 
+        # JPEG (not PNG): about 5x smaller, so a new colour reaches
+        # a phone much faster. 4:4:4 keeps colour edges crisp.
         Image.fromarray(result).save(
             output_path,
-            quality=95,
+            "JPEG",
+            quality=90,
+            subsampling=0,
         )
 
 

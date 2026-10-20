@@ -114,8 +114,9 @@ SAFE_FILENAME = re.compile(
 # Colour-scheme name for rendered variants.
 VARIANT = re.compile(r"^[a-z0-9]{1,8}$")
 
-# Rendered results: <id>_painted.png and <id>_painted_<variant>.png.
-PAINTED_FILE = re.compile(r"_painted(_[a-z0-9]{1,8})?\.png$")
+# Rendered results: <id>_painted.jpg and <id>_painted_<variant>.jpg
+# (older renders were .png).
+PAINTED_FILE = re.compile(r"_painted(_[a-z0-9]{1,8})?\.(jpg|png)$")
 
 # Per-image files that are NOT surface masks.
 NON_MASK_SUFFIXES = (
@@ -819,9 +820,9 @@ def recolor_image(payload: dict):
         )
 
     output_filename = (
-        f"{image_id}_painted_{variant}.png"
+        f"{image_id}_painted_{variant}.jpg"
         if variant
-        else f"{image_id}_painted.png"
+        else f"{image_id}_painted.jpg"
     )
 
     output_path = (
