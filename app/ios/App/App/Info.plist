@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>Paint AI</string>
+	<string>Griplac</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -32,13 +32,13 @@
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Paint AI uses the camera to photograph the walls you want to paint or the colours you want to identify.</string>
+	<string>Griplac uses the camera to photograph the walls you want to paint or the colours you want to identify.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Paint AI connects to the Paint AI server running on your computer on this network.</string>
+	<string>Griplac connects to the Griplac server running on your computer on this network.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Paint AI saves your painted photos to your library.</string>
+	<string>Griplac saves your painted photos to your library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Paint AI opens photos from your library so you can paint them or identify their colours.</string>
+	<string>Griplac opens photos from your library so you can paint them or identify their colours.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -1,13 +1,13 @@
 {
-  "name": "Paint AI",
-  "short_name": "Paint AI",
-  "description": "See your walls in any colour and identify the colours in your photos.",
+  "name": "Griplac Paints",
+  "short_name": "Griplac",
+  "description": "See your walls in Griplac colours and identify the colours in your photos.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#f6f4ef",
-  "theme_color": "#f6f4ef",
+  "background_color": "#f8f6fa",
+  "theme_color": "#f8f6fa",
   "icons": [
     {
       "src": "/icons/icon-192.png",

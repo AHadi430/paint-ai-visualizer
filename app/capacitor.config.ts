@@ -16,9 +16,9 @@ const serverUrl = process.env.CAP_SERVER_URL;
 
 const config: CapacitorConfig = {
   appId: 'com.ahadi430.paintai',
-  appName: 'Paint AI',
+  appName: 'Griplac',
   webDir: 'dist',
-  backgroundColor: '#f6f4ef',
+  backgroundColor: '#f8f6fa',
   ios: {
     // The web app handles the notch and home indicator itself
     // (viewport-fit=cover + safe-area insets in the CSS).

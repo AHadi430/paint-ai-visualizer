@@ -5,10 +5,14 @@ import {
   RollerIcon,
   SwatchesIcon,
 } from '../components/Icons';
+import logo from '../assets/griplac-logo.png';
 import { tapFeedback } from '../lib/haptics';
 import type { Photo, Shade } from '../types';
 
 export type Section = 'paint' | 'identify' | 'shades';
+
+// The colour strip from Griplac's product labels.
+const RAINBOW = ['#e63946', '#f77f00', '#fcbf49', '#2a9d8f', '#457b9d', '#6a4c93'];
 
 type Props = {
   shades: Shade[];
@@ -72,10 +76,19 @@ export function HomeScreen({
       </div>
 
       <header className="home-header">
-        <span className="home-logo" aria-hidden="true">
-          <i />
+        <img className="home-logo" src={logo} alt="Griplac Paints" />
+
+        <div className="home-badges">
+          <span className="since">SINCE 1998</span>
+          <span className="tagline">brighter and stronger for longer</span>
+        </div>
+
+        <span className="rainbow-strip" aria-hidden="true">
+          {RAINBOW.map((color) => (
+            <i key={color} style={{ background: color }} />
+          ))}
         </span>
-        <span className="brand">PAINT AI</span>
+
         <h1>
           Bring <span className="rainbow">colour</span>
           <br />
