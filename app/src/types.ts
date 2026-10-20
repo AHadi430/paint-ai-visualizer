@@ -44,8 +44,26 @@ export type PaletteColor = ColorReport & {
   share: number;
 };
 
+/** A surface in the photo (its shape only; colours live in schemes). */
 export type Wall = {
   id: string;
   maskUrl: string;
-  shade?: Shade;
+  /** Kind of surface, e.g. "Wall", "Ceiling", "Column". */
+  kind: string;
+};
+
+/** One colour scheme: which shade goes on which wall. */
+export type Scheme = {
+  id: string;
+  colors: Record<string, Shade>;
+  /** Rendered photo for this scheme, if it has colours. */
+  painted?: string;
+  /** The walls or photo changed since it was rendered. */
+  stale?: boolean;
+};
+
+/** A brush stroke in photo pixels. */
+export type Stroke = {
+  points: Point[];
+  width: number;
 };

@@ -3,6 +3,7 @@ import type {
   PaletteColor,
   Photo,
   Shade,
+  Stroke,
 } from './types';
 
 /*
@@ -101,14 +102,98 @@ export function findSurface(
   });
 }
 
-/** Render the photo with every painted surface. */
+/** Current mask image of a surface (a new URL after every edit). */
+export const maskUrlFor = (imageId: string, surfaceId: string) =>
+  freshUrl(`/api/visualizer/mask/${imageId}_${surfaceId}.png`);
+
+/**
+ * Render the photo with every painted surface. `variant` keeps
+ * separate results per colour scheme ("a", "b", "c").
+ */
 export function renderPaint(
   imageId: string,
-  surfaces: { surface_id: string; color: string }[]
+  surfaces: { surface_id: string; color: string }[],
+  variant?: string
 ) {
   return post<{ image_url: string }>('/api/visualizer/recolor', {
     image_id: imageId,
     surfaces,
+    variant,
+  });
+}
+
+export type DetectedSurface = {
+  id: string;
+  type: string;
+  score: number;
+  mask_url: string;
+  box: number[];
+};
+
+/** Find the walls, ceiling and other paintable surfaces in a photo. */
+export async function detectSurfaces(imageId: string) {
+  const data = await post<{ surfaces: DetectedSurface[] }>(
+    '/api/visualizer/analyze',
+    { image_id: imageId }
+  );
+
+  return data.surfaces;
+}
+
+const strokesBody = (strokes: Stroke[]) =>
+  strokes.map((stroke) => ({
+    points: stroke.points.map((point) => [point.x, point.y]),
+    width: stroke.width,
+  }));
+
+/** Add or remove brushed areas from a surface, or undo the last edit. */
+export function editSurface(
+  imageId: string,
+  surfaceId: string,
+  action: 'add' | 'remove' | 'undo',
+  strokes: Stroke[] = []
+) {
+  return post<{ mask_url: string; can_undo: boolean }>(
+    '/api/visualizer/edit-mask',
+    {
+      image_id: imageId,
+      surface_id: surfaceId,
+      action,
+      strokes: strokesBody(strokes),
+    }
+  );
+}
+
+/**
+ * Remove wires, poles, vehicles and clutter (auto) and/or brushed
+ * areas. Returns the cleaned photo, a new image.
+ */
+export async function cleanUpPhoto(
+  imageId: string,
+  auto: boolean,
+  strokes: Stroke[] = []
+) {
+  const data = await post<{
+    image_id: string;
+    image_url: string;
+    removed: string[];
+  }>('/api/visualizer/clean', {
+    image_id: imageId,
+    auto,
+    strokes: strokesBody(strokes),
+  });
+
+  return {
+    photo: { id: data.image_id, url: apiUrl(data.image_url) } as Photo,
+    removed: data.removed,
+  };
+}
+
+/** Copy surface masks to another version of the same photo. */
+export function transferSurfaces(fromImageId: string, toImageId: string) {
+  return post<{ copied: number }>('/api/visualizer/transfer-surfaces', {
+    from_image_id: fromImageId,
+    to_image_id: toImageId,
   });
 }
 

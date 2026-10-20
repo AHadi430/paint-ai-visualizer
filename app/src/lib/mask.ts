@@ -62,6 +62,33 @@ export async function maskContains(
   }
 }
 
+/** Fraction of mask A that lies inside mask B (0 when either fails). */
+export async function maskOverlap(urlA: string, urlB: string): Promise<number> {
+  try {
+    const [a, b] = await Promise.all([loadMask(urlA), loadMask(urlB)]);
+
+    if (a.width !== b.width || a.height !== b.height) {
+      return 0;
+    }
+
+    let inA = 0;
+    let both = 0;
+
+    for (let i = 0; i < a.data.length; i += 4) {
+      if (a.data[i] > 127) {
+        inA++;
+        if (b.data[i] > 127) {
+          both++;
+        }
+      }
+    }
+
+    return inA ? both / inA : 0;
+  } catch {
+    return 0;
+  }
+}
+
 /**
  * A translucent tint over the surface with a white outline, as an
  * object URL (revoke it when no longer shown).
