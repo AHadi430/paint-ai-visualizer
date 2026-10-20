@@ -316,6 +316,16 @@ class SAMService:
 
                 area_penalty = 0.85
 
+            # Slivers and specks: people tap to paint a
+            # surface, so a whole wall beats a fragment.
+            elif area_ratio < 0.003:
+
+                area_penalty = 0.3
+
+            elif area_ratio < 0.01:
+
+                area_penalty = 0.6
+
             else:
 
                 area_penalty = 1.0
