@@ -69,15 +69,6 @@ export function IdentifyScreen({
     };
   }, [photo?.id]);
 
-  // Free the previous highlight image when it changes.
-  useEffect(() => {
-    return () => {
-      if (highlight) {
-        URL.revokeObjectURL(highlight);
-      }
-    };
-  }, [highlight]);
-
   async function handleTap(point: Point, percent: Point) {
     if (!photo || busy) {
       return;

@@ -56,6 +56,18 @@ const MAX_SCHEMES = SCHEME_IDS.length;
 const BRUSH_ADD = '#2fbf71';
 const BRUSH_REMOVE = '#ff3b30';
 
+/** Download and decode an image before it is shown. */
+function preload(url: string): Promise<void> {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      image.decode().then(resolve, resolve);
+    };
+    image.onerror = () => resolve();
+    image.src = url;
+  });
+}
+
 /** Friendly kind of surface from the detector's label. */
 function kindOf(type: string) {
   const label = type.toLowerCase();
@@ -122,7 +134,10 @@ export function PaintScreen({
   const [previewId, setPreviewId] = useState('a');
 
   const [highlight, setHighlight] = useState<string>();
-  const [outlines, setOutlines] = useState<string[]>([]);
+  const [outline, setOutline] = useState<string>();
+
+  /** A new colour is being rendered in the background. */
+  const [updating, setUpdating] = useState(false);
 
   const wallCounter = useRef(0);
 
@@ -131,6 +146,27 @@ export function PaintScreen({
   wallsRef.current = walls;
   const schemesRef = useRef(schemes);
   schemesRef.current = schemes;
+  const activeIdRef = useRef(activeId);
+  activeIdRef.current = activeId;
+  const photoIdRef = useRef(photo?.id);
+
+  // Update state and its ref together, so work started in the same
+  // tap already sees the new value.
+  const setWallsNow = (list: Wall[]) => {
+    wallsRef.current = list;
+    setWalls(list);
+  };
+
+  const setSchemesNow = (update: (list: Scheme[]) => Scheme[]) => {
+    const next = update(schemesRef.current);
+    schemesRef.current = next;
+    setSchemes(next);
+  };
+
+  const selectScheme = (id: string) => {
+    activeIdRef.current = id;
+    setActiveId(id);
+  };
 
   // Set while swapping in a cleaned-up photo, so its arrival doesn't
   // start a new project.
@@ -147,6 +183,8 @@ export function PaintScreen({
   // ---------------------------------------------------------------
 
   useEffect(() => {
+    photoIdRef.current = photo?.id;
+
     if (photo && replacingTo.current === photo.id) {
       replacingTo.current = undefined;
       return;
@@ -225,19 +263,19 @@ export function PaintScreen({
       return;
     }
 
-    let url: string | undefined;
     let cancelled = false;
 
+    // Cached: re-selecting a wall is instant.
     highlightUrl(selected.maskUrl, undefined, tintSelected ? 95 : 0)
       .then((value) => {
-        url = value;
         if (!cancelled) setHighlight(value);
       })
-      .catch(() => setHighlight(undefined));
+      .catch(() => {
+        if (!cancelled) setHighlight(undefined);
+      });
 
     return () => {
       cancelled = true;
-      if (url) URL.revokeObjectURL(url);
     };
   }, [selected?.maskUrl, tintSelected]);
 
@@ -248,29 +286,26 @@ export function PaintScreen({
 
   const showOutlines = tool === 'tap' && !selected && !comparing;
 
+  // One combined (and cached) image for every wall that can still be
+  // painted. Prepared even while hidden, so it shows instantly.
   useEffect(() => {
-    if (!showOutlines || !unpaintedKey) {
-      setOutlines([]);
+    if (!unpaintedKey) {
+      setOutline(undefined);
       return;
     }
 
-    let urls: string[] = [];
     let cancelled = false;
 
-    Promise.all(
-      unpaintedKey.split('|').map((url) =>
-        highlightUrl(url, [106, 63, 208], 45).catch(() => '')
-      )
-    ).then((list) => {
-      urls = list.filter(Boolean);
-      if (!cancelled) setOutlines(urls);
-    });
+    highlightUrl(unpaintedKey.split('|'), [106, 63, 208], 45)
+      .then((value) => {
+        if (!cancelled) setOutline(value);
+      })
+      .catch(() => {});
 
     return () => {
       cancelled = true;
-      urls.forEach((url) => URL.revokeObjectURL(url));
     };
-  }, [unpaintedKey, showOutlines]);
+  }, [unpaintedKey]);
 
   // ---------------------------------------------------------------
   // Rendering colour schemes
@@ -295,7 +330,66 @@ export function PaintScreen({
   }
 
   const replaceScheme = (scheme: Scheme) =>
-    setSchemes((list) => list.map((item) => (item.id === scheme.id ? scheme : item)));
+    setSchemesNow((list) => list.map((item) => (item.id === scheme.id ? scheme : item)));
+
+  // Renders of the current scheme run one at a time in the background.
+  // Changes made while one runs are merged into a single next render,
+  // so tapping through shades quickly never queues up stale work.
+  const renderBusy = useRef(false);
+  const renderAgain = useRef(false);
+
+  async function scheduleRender() {
+    if (renderBusy.current) {
+      renderAgain.current = true;
+      return;
+    }
+
+    renderBusy.current = true;
+    setUpdating(true);
+
+    try {
+      do {
+        renderAgain.current = false;
+
+        const scheme = schemesRef.current.find(
+          (item) => item.id === activeIdRef.current
+        );
+
+        if (!scheme) {
+          break;
+        }
+
+        const rendered = await render(scheme, photoIdRef.current, wallsRef.current);
+
+        // Download and decode before swapping, so the photo changes in
+        // one step instead of flashing.
+        if (rendered.painted) {
+          await preload(rendered.painted);
+        }
+
+        if (!renderAgain.current) {
+          setSchemesNow((list) =>
+            list.map((item) =>
+              item.id === rendered.id
+                ? { ...item, painted: rendered.painted, stale: false }
+                : item
+            )
+          );
+        }
+      } while (renderAgain.current);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not paint the wall.');
+    } finally {
+      renderBusy.current = false;
+      setUpdating(false);
+    }
+  }
+
+  async function waitForRender() {
+    while (renderBusy.current) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  }
 
   async function run(label: string, task: () => Promise<void>, failure: string) {
     setBusy(label);
@@ -309,10 +403,19 @@ export function PaintScreen({
     }
   }
 
-  /** Put a shade on a wall (or remove it) in the current scheme. */
-  function paint(wallId: string, shade: Shade | undefined, wallList?: Wall[]) {
-    const snapshot = { schemes: schemesRef.current, activeId };
-    const colors = { ...active.colors };
+  /**
+   * Put a shade on a wall (or remove it) in the current scheme. The
+   * choice shows immediately; the photo updates when its render is
+   * ready.
+   */
+  function paint(wallId: string, shade: Shade | undefined) {
+    const scheme = schemesRef.current.find((item) => item.id === activeIdRef.current);
+
+    if (!scheme) {
+      return;
+    }
+
+    const colors = { ...scheme.colors };
 
     if (shade) {
       colors[wallId] = shade;
@@ -320,19 +423,20 @@ export function PaintScreen({
       delete colors[wallId];
     }
 
-    return run(
-      'Painting…',
-      async () => {
-        const rendered = await render({ ...active, colors }, photo?.id, wallList);
-        setHistory((list) => [...list, snapshot]);
-        replaceScheme(rendered);
+    setHistory((list) => [
+      ...list,
+      { schemes: schemesRef.current, activeId: activeIdRef.current },
+    ]);
 
-        if (shade) {
-          successFeedback();
-        }
-      },
-      'Could not paint the wall.'
+    setSchemesNow((list) =>
+      list.map((item) => (item.id === scheme.id ? { ...item, colors } : item))
     );
+
+    if (shade) {
+      successFeedback();
+    }
+
+    void scheduleRender();
   }
 
   async function handleTap(point: Point) {
@@ -348,7 +452,7 @@ export function PaintScreen({
         setSelectedId(wall.id);
 
         if (pendingShade) {
-          await paint(wall.id, pendingShade);
+          paint(wall.id, pendingShade);
           onPendingUsed();
         }
 
@@ -367,12 +471,11 @@ export function PaintScreen({
         const wall: Wall = { id, maskUrl: freshUrl(mask_url), kind: 'Wall' };
         const next = [...wallsRef.current, wall];
 
-        setWalls(next);
+        setWallsNow(next);
         setSelectedId(id);
 
         if (pendingShade) {
-          setBusy(undefined);
-          await paint(id, pendingShade, next);
+          paint(id, pendingShade);
           onPendingUsed();
         }
       },
@@ -380,42 +483,33 @@ export function PaintScreen({
     );
   }
 
-  async function undo() {
+  function undo() {
     const previous = history[history.length - 1];
 
     if (!previous || busy) {
       return;
     }
 
-    await run(
-      'Undoing…',
-      async () => {
-        const restored = previous.schemes.map((scheme) => ({ ...scheme, stale: true }));
-        const current =
-          restored.find((scheme) => scheme.id === previous.activeId) ?? restored[0];
-        const rendered = await render(current);
-
-        setSchemes(restored.map((scheme) => (scheme.id === rendered.id ? rendered : scheme)));
-        setActiveId(rendered.id);
-        setHistory((list) => list.slice(0, -1));
-      },
-      'Could not undo.'
-    );
+    tapFeedback();
+    setHistory((list) => list.slice(0, -1));
+    setSchemesNow(() => previous.schemes.map((scheme) => ({ ...scheme, stale: true })));
+    selectScheme(previous.activeId);
+    void scheduleRender();
   }
 
   // ---------------------------------------------------------------
   // Colour schemes A / B / C
   // ---------------------------------------------------------------
 
-  async function switchScheme(id: string) {
+  function switchScheme(id: string) {
     tapFeedback();
-    setActiveId(id);
+    selectScheme(id);
     setSelectedId(undefined);
 
     const scheme = schemesRef.current.find((item) => item.id === id);
 
     if (scheme?.stale) {
-      await run('Updating…', async () => replaceScheme(await render(scheme)), 'Could not update.');
+      void scheduleRender();
     }
   }
 
@@ -427,19 +521,24 @@ export function PaintScreen({
     }
 
     tapFeedback();
+    await waitForRender();
 
-    await run(
-      'Creating scheme…',
-      async () => {
-        // Start from the current colours, so one wall can be changed.
-        const scheme = await render({ id, colors: { ...active.colors } });
-        setSchemes((list) => [...list, scheme].sort((a, b) => a.id.localeCompare(b.id)));
-        setActiveId(id);
-        setSelectedId(undefined);
-        notify(`Scheme ${id.toUpperCase()} created. Change any wall to compare.`);
-      },
-      'Could not create a scheme.'
-    );
+    // Start from the current colours (and their render, which is the
+    // same picture), so one wall can be changed and compared.
+    const current =
+      schemesRef.current.find((item) => item.id === activeIdRef.current) ?? active;
+
+    const scheme: Scheme = {
+      id,
+      colors: { ...current.colors },
+      painted: current.painted,
+      stale: current.stale,
+    };
+
+    setSchemesNow((list) => [...list, scheme].sort((a, b) => a.id.localeCompare(b.id)));
+    selectScheme(id);
+    setSelectedId(undefined);
+    notify(`Scheme ${id.toUpperCase()} created. Change any wall to compare.`);
   }
 
   function deleteScheme(id: string) {
@@ -448,14 +547,11 @@ export function PaintScreen({
     }
 
     const rest = schemes.filter((scheme) => scheme.id !== id);
-    setSchemes(rest);
+    setSchemesNow(() => rest);
     setHistory([]);
 
     if (activeId === id) {
-      setActiveId(rest[0].id);
-      if (rest[0].stale) {
-        void switchScheme(rest[0].id);
-      }
+      switchScheme(rest[0].id);
     }
 
     if (previewId === id) {
@@ -470,11 +566,13 @@ export function PaintScreen({
     await run(
       'Preparing comparison…',
       async () => {
+        await waitForRender();
+
         const updated = await Promise.all(
           schemesRef.current.map((scheme) => (scheme.stale ? render(scheme) : scheme))
         );
-        setSchemes(updated);
-        setPreviewId(activeId);
+        setSchemesNow(() => updated);
+        setPreviewId(activeIdRef.current);
         setSheet('compare');
       },
       'Could not prepare the comparison.'
@@ -506,6 +604,8 @@ export function PaintScreen({
     await run(
       action === 'undo' ? 'Undoing…' : 'Updating edges…',
       async () => {
+        await waitForRender();
+
         const result = await editSurface(
           photo.id,
           wallId,
@@ -518,7 +618,7 @@ export function PaintScreen({
           wall.id === wallId ? { ...wall, maskUrl } : wall
         );
 
-        setWalls(nextWalls);
+        setWallsNow(nextWalls);
         setStrokes([]);
         setUndoableEdges((set) => {
           const next = new Set(set);
@@ -528,15 +628,12 @@ export function PaintScreen({
         });
 
         // Every scheme painting this wall needs a new render.
-        const updated = await Promise.all(
-          schemesRef.current.map(async (scheme) => {
-            if (!scheme.colors[wallId]) return scheme;
-            return scheme.id === activeId
-              ? render(scheme, photo.id, nextWalls)
-              : { ...scheme, stale: true };
-          })
+        setSchemesNow((list) =>
+          list.map((scheme) =>
+            scheme.colors[wallId] ? { ...scheme, stale: true } : scheme
+          )
         );
-        setSchemes(updated);
+        void scheduleRender();
         successFeedback();
       },
       'Could not update the edges.'
@@ -549,25 +646,21 @@ export function PaintScreen({
 
   /** Swap in another version of the photo, keeping walls and colours. */
   async function swapPhoto(next: Photo) {
+    await waitForRender();
+
     replacingTo.current = next.id;
+    photoIdRef.current = next.id;
     onPhotoReplaced(next);
 
-    const nextWalls = wallsRef.current.map((wall) => ({
-      ...wall,
-      maskUrl: maskUrlFor(next.id, wall.id),
-    }));
-
-    setWalls(nextWalls);
-
-    const updated = await Promise.all(
-      schemesRef.current.map((scheme) =>
-        scheme.id === activeId
-          ? render(scheme, next.id, nextWalls)
-          : { ...scheme, stale: true }
-      )
+    setWallsNow(
+      wallsRef.current.map((wall) => ({
+        ...wall,
+        maskUrl: maskUrlFor(next.id, wall.id),
+      }))
     );
 
-    setSchemes(updated);
+    setSchemesNow((list) => list.map((scheme) => ({ ...scheme, stale: true })));
+    await scheduleRender();
   }
 
   async function autoClean() {
@@ -797,6 +890,7 @@ export function PaintScreen({
         onTap={comparing || brushing ? undefined : handleTap}
         compareSrc={comparing ? original?.url ?? photo.url : undefined}
         busyLabel={busy}
+        working={updating ? 'Painting…' : undefined}
         brush={
           brushing
             ? {
@@ -808,9 +902,7 @@ export function PaintScreen({
             : undefined
         }
       >
-        {outlines.map((url) => (
-          <img key={url} className="overlay" src={url} alt="" />
-        ))}
+        {showOutlines && outline && <img className="overlay" src={outline} alt="" />}
 
         {highlight && tool !== 'erase' && <img className="overlay" src={highlight} alt="" />}
       </PhotoStage>

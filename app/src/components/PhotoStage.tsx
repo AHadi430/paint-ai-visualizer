@@ -19,6 +19,8 @@ type Props = {
   /** Show a before/after slider with this image as "before". */
   compareSrc?: string;
   busyLabel?: string;
+  /** Non-blocking progress note, e.g. while a new colour renders. */
+  working?: string;
   /**
    * Brush mode: strokes are drawn on the photo instead of taps.
    * Brush size is in screen pixels, strokes are in photo pixels.
@@ -44,6 +46,7 @@ export function PhotoStage({
   onTap,
   compareSrc,
   busyLabel,
+  working,
   brush,
   children,
 }: Props) {
@@ -301,6 +304,13 @@ export function PhotoStage({
             <span className="tag tag-left">Before</span>
             <span className="tag tag-right">After</span>
           </>
+        )}
+
+        {working && !busyLabel && (
+          <div className="working">
+            <span className="spinner" />
+            {working}
+          </div>
         )}
 
         {busyLabel && (
