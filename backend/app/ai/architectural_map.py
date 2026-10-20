@@ -12,6 +12,7 @@ from transformers import (
 
 from .device_lock import inference_lock
 from .sam import sam_service
+from ..services.mask_refine import refine_mask
 
 
 MODEL_ID = "IDEA-Research/grounding-dino-tiny"
@@ -48,6 +49,20 @@ PAINTABLE_CLASSES = [
 
     "accent wall",
     "architectural wall",
+
+    "interior wall",
+    "ceiling",
+]
+
+
+# Grounding DINO scores drop when the prompt lists many classes, so
+# surfaces are detected in small groups (indoor rooms were often missed
+# entirely with one long prompt).
+PAINTABLE_GROUPS = [
+    ["wall", "interior wall", "exterior wall", "building facade"],
+    ["ceiling"],
+    ["column", "pillar"],
+    ["balcony wall", "parapet wall"],
 ]
 
 
@@ -55,22 +70,15 @@ PAINTABLE_CLASSES = [
 # Objects that must NOT accidentally get painted.
 # ---------------------------------------------------------
 
+PROTECTED_GROUPS = [
+    ["window", "glass window", "door", "doorway", "garage door", "gate"],
+    ["railing", "radiator", "air conditioner", "lamp", "wire"],
+    ["person", "car", "motorcycle", "tree", "plant"],
+    ["sofa", "bed", "cabinet", "shelf", "television", "picture frame"],
+]
+
 PROTECTED_CLASSES = [
-    "window",
-    "glass window",
-    "door",
-    "doorway",
-    "garage door",
-    "gate",
-    "glass",
-    "railing",
-    "metal railing",
-    "person",
-    "car",
-    "motorcycle",
-    "tree",
-    "plant",
-    "wire",
+    name for group in PROTECTED_GROUPS for name in group
 ]
 
 
@@ -233,6 +241,14 @@ class ArchitecturalMapService:
 
 
     @staticmethod
+    def _iou(a: np.ndarray, b: np.ndarray) -> float:
+
+        union = np.logical_or(a, b).sum()
+
+        return float(np.logical_and(a, b).sum() / union) if union else 0.0
+
+
+    @staticmethod
     def _remove_small_components(
         mask: np.ndarray,
         min_area: int = 500,
@@ -291,27 +307,40 @@ class ArchitecturalMapService:
         # 1. Detect protected regions FIRST.
         # -------------------------------------------------
 
-        protected_detections = (
-            self._detect(
+        protected_detections = [
+            detection
+            for group in PROTECTED_GROUPS
+            for detection in self._detect(
                 image,
-                PROTECTED_CLASSES,
+                group,
                 threshold=0.28,
                 text_threshold=0.22,
             )
-        )
+        ]
 
         # -------------------------------------------------
-        # 2. Detect paintable architectural regions.
+        # 2. Detect paintable architectural regions. Groups
+        #    are handled in order (walls first), most
+        #    confident first within a group, so a wall that
+        #    the "column" prompt also matched is named a wall.
         # -------------------------------------------------
 
-        paintable_detections = (
-            self._detect(
-                image,
-                PAINTABLE_CLASSES,
-                threshold=0.28,
-                text_threshold=0.22,
+        paintable_detections = [
+            detection
+            for group in PAINTABLE_GROUPS
+            for detection in sorted(
+                self._detect(
+                    image,
+                    group,
+                    threshold=0.27,
+                    text_threshold=0.22,
+                ),
+                key=lambda detection: -detection["score"],
             )
-        )
+        ]
+
+        image_rgb = np.array(image)
+        image_area = image.width * image.height
 
         protected_masks = []
 
@@ -328,9 +357,12 @@ class ArchitecturalMapService:
                     )
                 )
 
-                protected_masks.append(
-                    mask
-                )
+                # A huge "window" mask is a detection error;
+                # it would wipe out most of the walls.
+                if mask.mean() <= 0.25:
+                    protected_masks.append(
+                        mask
+                    )
 
             except Exception as exc:
 
@@ -366,9 +398,14 @@ class ArchitecturalMapService:
         # Convert each paintable detection to a SAM mask.
         # -------------------------------------------------
 
-        for index, detection in enumerate(
-            paintable_detections
-        ):
+        for detection in paintable_detections:
+
+            # A box around (almost) the whole photo is the
+            # detector naming the entire room, not one wall.
+            x1, y1, x2, y2 = detection["box"]
+
+            if (x2 - x1) * (y2 - y1) > image_area * 0.85:
+                continue
 
             try:
 
@@ -379,8 +416,9 @@ class ArchitecturalMapService:
                     )
                 )
 
-                mask = mask.astype(
-                    bool
+                mask = refine_mask(
+                    mask,
+                    image_rgb,
                 )
 
                 # -----------------------------------------
@@ -397,10 +435,12 @@ class ArchitecturalMapService:
                 # Remove tiny fragments.
                 # -----------------------------------------
 
+                min_area = max(800, int(image_area * 0.005))
+
                 mask = (
                     self._remove_small_components(
                         mask,
-                        min_area=800,
+                        min_area=min_area,
                     )
                 )
 
@@ -408,11 +448,18 @@ class ArchitecturalMapService:
                     mask.sum()
                 )
 
-                if area < 800:
+                if area < min_area or area > image_area * 0.7:
+                    continue
+
+                # Several prompts often find the same wall.
+                if any(
+                    self._iou(mask, kept["mask"]) > 0.6
+                    for kept in surfaces
+                ):
                     continue
 
                 surface_id = (
-                    f"surface_{index + 1}"
+                    f"surface_{len(surfaces) + 1}"
                 )
 
                 surfaces.append(
