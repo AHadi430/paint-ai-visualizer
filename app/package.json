@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "ios": "node scripts/ios.mjs",
-    "phone": "vite build && vite preview"
+    "phone": "vite build && vite preview",
+    "tunnel": "node scripts/tunnel.mjs"
   },
   "dependencies": {
     "@capacitor/clipboard": "^8.0.1",

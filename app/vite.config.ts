@@ -8,17 +8,28 @@ const proxy = {
   '/api': 'http://localhost:8000',
 };
 
+// Internet addresses that may reach this server: Cloudflare quick
+// tunnels (`npm run tunnel`), plus your own tunnel domain if you set
+// TUNNEL_HOST (e.g. TUNNEL_HOST=app.griplac.com).
+const allowedHosts = [
+  '.trycloudflare.com',
+  ...(process.env.TUNNEL_HOST ? [process.env.TUNNEL_HOST] : []),
+];
+
 export default defineConfig({
   plugins: [react()],
   server: {
     host: true,
     port: 5174,
     strictPort: true,
+    allowedHosts,
     proxy,
   },
   preview: {
     host: true,
     port: 4174,
+    strictPort: true,
+    allowedHosts,
     proxy,
   },
 });

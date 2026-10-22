@@ -70,6 +70,31 @@ Apps signed with a free Apple account stop opening after 7 days; press Run
 in Xcode again to renew. If the Mac's Wi-Fi address changes, run
 `npm run ios` again.
 
+### Use it from anywhere (free Cloudflare Tunnel)
+To use the app on mobile data or another network, while the AI still runs
+on this Mac:
+
+```bash
+brew install cloudflared   # once
+cd app
+npm run tunnel
+```
+
+This starts the backend (if needed) and the fast app build, opens a free
+Cloudflare quick tunnel, prints its `https://….trycloudflare.com` address
+and points the iPhone app at it. Then press **Run** in Xcode once; any
+phone can also open the address in a browser.
+
+- Keep the terminal window open and the Mac plugged in, online and awake
+  (the script keeps it from sleeping). Ctrl+C takes the app offline.
+- The address changes every time the tunnel starts, so press Run in Xcode
+  again after each restart. A fixed address needs a domain in Cloudflare
+  (a "named tunnel"); set `TUNNEL_HOST` to it so the app server accepts it.
+- Visitors coming through the tunnel are rate-limited
+  (`RATE_LIMIT_PER_MINUTE`, default 240 requests/min, and
+  `RATE_LIMIT_HEAVY_PER_10_MINUTES`, default 40 uploads, detections and
+  clean-ups per 10 min, per visitor). Use on this Mac is never limited.
+
 ## Setup
 
 ### 1. Model weights

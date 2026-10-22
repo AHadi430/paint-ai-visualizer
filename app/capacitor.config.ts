@@ -4,7 +4,8 @@ import type { CapacitorConfig } from '@capacitor/cli';
  * Native iOS wrapper around the web app (see ios/).
  *
  * For testing on a phone, `npm run ios` sets CAP_SERVER_URL to this
- * computer's dev server (http://<wifi-ip>:5174). The iPhone app then
+ * computer's Wi-Fi address, and `npm run tunnel` to a secure Cloudflare
+ * Tunnel address that works on any network. The iPhone app then
  * loads the app from there, so:
  *   - /api reaches the backend through Vite's proxy (no CORS setup),
  *   - code changes show up on the phone immediately (live reload).
@@ -27,7 +28,9 @@ const config: CapacitorConfig = {
   ...(serverUrl && {
     server: {
       url: serverUrl,
-      cleartext: true,
+      // Plain http is only needed for the Wi-Fi address; the
+      // tunnel (`npm run tunnel`) is https.
+      cleartext: serverUrl.startsWith('http://'),
     },
   }),
 };
