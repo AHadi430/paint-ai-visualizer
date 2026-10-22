@@ -75,6 +75,12 @@ If something goes wrong:
   Start the backend and `npm run phone` (or `npm run tunnel`); the app
   reconnects by itself. If the Mac's address changed, run `npm run ios`
   (or `npm run tunnel`) and press Run in Xcode again.
+- **The Mac's address keeps changing**: a Mac that switches between two
+  Wi-Fi networks from the same router (e.g. a 2.4 GHz and a 5 GHz one)
+  gets a different address on each. In System Settings → Wi-Fi →
+  Details, set *Private Wi-Fi address* to *Off* for both networks, so the
+  router usually gives the Mac the same address on both, or reserve an
+  address for the Mac in the router's settings.
 - **The iPhone isn't in Xcode's device list**: plug it in, unlock it and
   tap *Trust* if asked. Xcode may offer to download an iOS simulator
   after it updates; a real iPhone doesn't need it.
