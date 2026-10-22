@@ -70,6 +70,15 @@ Apps signed with a free Apple account stop opening after 7 days; press Run
 in Xcode again to renew. If the Mac's Wi-Fi address changes, run
 `npm run ios` again.
 
+If something goes wrong:
+- **"Can't reach Griplac" on the phone**: the Mac isn't serving the app.
+  Start the backend and `npm run phone` (or `npm run tunnel`); the app
+  reconnects by itself. If the Mac's address changed, run `npm run ios`
+  (or `npm run tunnel`) and press Run in Xcode again.
+- **The iPhone isn't in Xcode's device list**: plug it in, unlock it and
+  tap *Trust* if asked. Xcode may offer to download an iOS simulator
+  after it updates; a real iPhone doesn't need it.
+
 ### Use it from anywhere (free Cloudflare Tunnel)
 To use the app on mobile data or another network, while the AI still runs
 on this Mac:
@@ -94,6 +103,9 @@ phone can also open the address in a browser.
   (`RATE_LIMIT_PER_MINUTE`, default 240 requests/min, and
   `RATE_LIMIT_HEAVY_PER_10_MINUTES`, default 40 uploads, detections and
   clean-ups per 10 min, per visitor). Use on this Mac is never limited.
+- If it keeps saying Cloudflare was slow to respond, Cloudflare's free
+  service can't be reached well from your network right now. Try again
+  later or on another network, or use the Wi-Fi setup above meanwhile.
 
 ## Setup
 
