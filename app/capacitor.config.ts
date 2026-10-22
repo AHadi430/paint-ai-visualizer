@@ -31,6 +31,10 @@ const config: CapacitorConfig = {
       // Plain http is only needed for the Wi-Fi address; the
       // tunnel (`npm run tunnel`) is https.
       cleartext: serverUrl.startsWith('http://'),
+      // Shown when that address can't be reached (Mac off, server
+      // stopped, old tunnel address), instead of a blank white screen.
+      // Written by scripts/sync-ios.mjs.
+      errorPath: 'offline.html',
     },
   }),
 };

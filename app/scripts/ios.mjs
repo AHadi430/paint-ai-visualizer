@@ -10,6 +10,7 @@
 
 import { execSync } from 'node:child_process';
 import { networkInterfaces } from 'node:os';
+import { syncIos } from './sync-ios.mjs';
 
 function wifiAddress() {
   const candidates = Object.entries(networkInterfaces())
@@ -46,7 +47,7 @@ const run = (command, env = {}) =>
 // dist/ must exist for `cap sync`, even though the phone loads the
 // dev server.
 run('npx vite build');
-run('npx cap sync ios', { CAP_SERVER_URL: serverUrl });
+syncIos(serverUrl);
 
 console.log(`
 The iPhone app will load ${serverUrl}

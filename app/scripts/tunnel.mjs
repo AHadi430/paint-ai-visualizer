@@ -15,6 +15,7 @@
 import { execSync, spawn } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { syncIos } from './sync-ios.mjs';
 
 const appDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const backendDir = resolve(appDir, '../backend');
@@ -174,11 +175,7 @@ console.log(`✔ Tunnel open: ${publicUrl}`);
 
 // 4. Point the iPhone app at the tunnel.
 if (!process.argv.includes('--no-ios')) {
-  execSync('npx cap sync ios', {
-    cwd: appDir,
-    stdio: 'ignore',
-    env: { ...process.env, CAP_SERVER_URL: publicUrl },
-  });
+  syncIos(publicUrl, { stdio: 'ignore' });
   console.log('✔ iPhone app now points at the tunnel');
 }
 

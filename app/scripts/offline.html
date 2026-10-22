@@ -1,0 +1,164 @@
+<!doctype html>
+<!--
+  Shown by the iPhone app when it can't load the app from this Mac
+  (server.errorPath in capacitor.config.ts). scripts/sync-ios.mjs
+  copies it to dist/ with the server address filled in.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Griplac</title>
+    <style>
+      :root {
+        --brand: #30078d;
+        --brand-2: #6a3fd0;
+        --bg: #f8f6fa;
+        --ink: #171717;
+        --muted: #77736b;
+        --line: #e8e3ee;
+        font-family: Inter, -apple-system, BlinkMacSystemFont, system-ui,
+          sans-serif;
+        color: var(--ink);
+        background: var(--bg);
+        -webkit-font-smoothing: antialiased;
+        -webkit-text-size-adjust: 100%;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: calc(env(safe-area-inset-top, 0px) + 24px) 24px
+          calc(env(safe-area-inset-bottom, 0px) + 24px);
+        background: var(--bg);
+      }
+
+
+      main {
+        max-width: 420px;
+        width: 100%;
+        margin: 0 auto;
+        text-align: center;
+      }
+
+      img {
+        width: 72px;
+        height: 72px;
+        border-radius: 18px;
+      }
+
+      h1 {
+        margin: 20px 0 8px;
+        font-size: 24px;
+        letter-spacing: -0.02em;
+      }
+
+      p {
+        margin: 0 0 12px;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.45;
+      }
+
+      ol {
+        margin: 20px 0 24px;
+        padding: 16px 16px 16px 36px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: #fff;
+        text-align: left;
+        font-size: 15px;
+        line-height: 1.45;
+      }
+
+      li + li {
+        margin-top: 8px;
+      }
+
+      code {
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 14px;
+        color: var(--brand);
+      }
+
+      button {
+        width: 100%;
+        min-height: 52px;
+        border: 0;
+        border-radius: 16px;
+        background: linear-gradient(135deg, var(--brand), var(--brand-2));
+        color: #fff;
+        font: inherit;
+        font-size: 17px;
+        font-weight: 600;
+      }
+
+      button:active {
+        opacity: 0.85;
+      }
+
+      .status {
+        margin-top: 14px;
+        font-size: 13px;
+        word-break: break-all;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="icons/icon-192.png" alt="" />
+      <h1>Can't reach Griplac</h1>
+      <p>The app runs on your Mac, and the Mac isn't answering right now.</p>
+
+      <ol>
+        <li>Make sure the Mac is on, awake and online.</li>
+        <li id="tunnel-steps">
+          In the <code>app</code> folder, run <code>npm run tunnel</code> and
+          keep that window open. If it shows a new address, run the app from
+          Xcode again.
+        </li>
+        <li id="wifi-steps" hidden>
+          In the <code>app</code> folder, run <code>npm run phone</code>, and
+          keep this phone on the same Wi-Fi as the Mac.
+        </li>
+      </ol>
+
+      <button type="button" id="retry">Try again</button>
+      <p class="status" id="status"></p>
+    </main>
+
+    <script>
+      const SERVER = "__SERVER_URL__";
+
+      const status = document.getElementById('status');
+      const isTunnel = SERVER.startsWith('https://');
+
+      document.getElementById('tunnel-steps').hidden = !isTunnel;
+      document.getElementById('wifi-steps').hidden = isTunnel;
+      status.textContent = `Trying ${SERVER}`;
+
+      const open = () => location.replace(SERVER);
+      document.getElementById('retry').addEventListener('click', open);
+
+      // Reconnect by itself as soon as the Mac answers again.
+      setInterval(async () => {
+        try {
+          await fetch(SERVER, { mode: 'no-cors', cache: 'no-store' });
+          open();
+        } catch {
+          // Still unreachable; try again on the next tick.
+        }
+      }, 4000);
+    </script>
+  </body>
+</html>
