@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     # X-Access-Password header. Leave empty locally.
     access_password: str = ""
 
+    # Limits for visitors reaching this computer through the
+    # internet (Cloudflare Tunnel). 0 turns a limit off.
+    rate_limit_per_minute: int = 240
+    rate_limit_heavy_per_10_minutes: int = 40
+
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / "backend" / ".env",
         extra="ignore",

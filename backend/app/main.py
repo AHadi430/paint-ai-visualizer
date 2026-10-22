@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from .config import settings
 from .api.visualizer import router
 from .services.cleanup_service import delete_old_files
+from .services.rate_limit import RateLimiter
 
 
 Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
@@ -90,6 +91,42 @@ async def require_access_password(
             {"detail": "Access password required."},
             status_code=401,
         )
+
+    return await call_next(request)
+
+
+rate_limiter = RateLimiter(
+    per_minute=settings.rate_limit_per_minute or 10**9,
+    heavy_per_10_minutes=settings.rate_limit_heavy_per_10_minutes or 10**9,
+)
+
+
+@app.middleware("http")
+async def limit_internet_visitors(
+    request: Request,
+    call_next,
+):
+    """
+    Usage limits for visitors coming through Cloudflare (the tunnel
+    sets CF-Connecting-IP). Use on this computer is not limited.
+    """
+
+    client = request.headers.get("cf-connecting-ip")
+
+    if client and request.method == "POST":
+        retry_after = rate_limiter.check(client, request.url.path)
+
+        if retry_after is not None:
+            return JSONResponse(
+                {
+                    "detail": (
+                        "You're doing that a lot. Please wait "
+                        f"{retry_after} seconds and try again."
+                    )
+                },
+                status_code=429,
+                headers={"Retry-After": str(retry_after)},
+            )
 
     return await call_next(request)
 
