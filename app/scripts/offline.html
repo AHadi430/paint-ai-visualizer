@@ -131,6 +131,11 @@
           In the <code>app</code> folder, run <code>npm run phone</code>, and
           keep this phone on the same Wi-Fi as the Mac.
         </li>
+        <li id="address-steps" hidden>
+          Check the address below matches the <em>Network</em> address
+          <code>npm run phone</code> shows. If it doesn't, the Mac got a new
+          one: run <code>npm run ios</code> and press Run in Xcode again.
+        </li>
       </ol>
 
       <button type="button" id="retry">Try again</button>
@@ -145,6 +150,7 @@
 
       document.getElementById('tunnel-steps').hidden = !isTunnel;
       document.getElementById('wifi-steps').hidden = isTunnel;
+      document.getElementById('address-steps').hidden = isTunnel;
       status.textContent = `Trying ${SERVER}`;
 
       const open = () => location.replace(SERVER);
