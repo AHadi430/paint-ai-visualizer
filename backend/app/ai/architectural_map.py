@@ -291,6 +291,39 @@ class ArchitecturalMapService:
         )
 
 
+    @staticmethod
+    def _separate_overlaps(
+        surfaces: list[dict[str, Any]],
+    ) -> None:
+        """
+        Give every pixel to one surface only. SAM often runs
+        a wall into a ceiling of the same colour, so the wall's
+        mask also covers the ceiling found separately, and
+        tapping the wall painted the ceiling too. An overlap
+        goes to the smaller surface (the ceiling, a column),
+        which it is the bigger part of.
+        """
+
+        areas = [
+            int(surface["mask"].sum())
+            for surface in surfaces
+        ]
+
+        for i, first in enumerate(surfaces):
+
+            for j in range(i + 1, len(surfaces)):
+
+                second = surfaces[j]
+                overlap = first["mask"] & second["mask"]
+
+                if not overlap.any():
+                    continue
+
+                larger = first if areas[i] > areas[j] else second
+                larger["mask"] = larger["mask"] & ~overlap
+
+
+
     def analyze(
         self,
         image_path: str,
@@ -393,6 +426,8 @@ class ArchitecturalMapService:
 
         surfaces = []
 
+        min_area = max(800, int(image_area * 0.005))
+
 
         # -------------------------------------------------
         # Convert each paintable detection to a SAM mask.
@@ -435,8 +470,6 @@ class ArchitecturalMapService:
                 # Remove tiny fragments.
                 # -----------------------------------------
 
-                min_area = max(800, int(image_area * 0.005))
-
                 mask = (
                     self._remove_small_components(
                         mask,
@@ -458,13 +491,8 @@ class ArchitecturalMapService:
                 ):
                     continue
 
-                surface_id = (
-                    f"surface_{len(surfaces) + 1}"
-                )
-
                 surfaces.append(
                     {
-                        "id": surface_id,
                         "type": self._clean_label(
                             detection["label"],
                             PAINTABLE_CLASSES,
@@ -488,10 +516,39 @@ class ArchitecturalMapService:
                 )
 
 
+        # -------------------------------------------------
+        # 3. Split overlapping surfaces, then drop what is
+        #    left of a surface if it is only fragments.
+        # -------------------------------------------------
+
+        self._separate_overlaps(surfaces)
+
+        kept = []
+
+        for surface in surfaces:
+
+            mask = self._remove_small_components(
+                surface["mask"],
+                min_area=min_area,
+            )
+
+            if mask.sum() < min_area:
+                continue
+
+            kept.append(
+                {
+                    **surface,
+                    "id": f"surface_{len(kept) + 1}",
+                    "mask": mask,
+                }
+            )
+
+
+
         return {
             "width": width,
             "height": height,
-            "surfaces": surfaces,
+            "surfaces": kept,
             "protected_count": len(
                 protected_masks
             ),
