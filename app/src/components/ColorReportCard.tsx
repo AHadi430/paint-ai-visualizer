@@ -67,7 +67,7 @@ export function ColorReportCard({
             <div className="match-text">
               <strong>{shade.name}</strong>
               <small>
-                {shade.code} · <MatchBadge match={shade.match} />
+                {shade.range} {shade.code} · <MatchBadge match={shade.match} />
               </small>
             </div>
 

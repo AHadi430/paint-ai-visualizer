@@ -1061,6 +1061,10 @@ button:disabled {
   overscroll-behavior: contain;
 }
 
+.sheet-body > .note {
+  margin: 0;
+}
+
 .sheet-actions {
   display: grid;
   grid-template-columns: 1fr 1.6fr;
@@ -1136,6 +1140,61 @@ button:disabled {
   color: #fff;
 }
 
+/* Every range stays visible: tabs share the width and wrap their
+   names onto two lines on narrow phones. */
+.range-tabs {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--soft);
+}
+
+.range-tab {
+  min-height: 44px;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 11px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--muted);
+}
+
+.range-tab.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  box-shadow: 0 6px 14px -8px var(--accent);
+}
+
+.range-info {
+  margin: -2px 4px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.swatch-section + .swatch-section {
+  margin-top: 6px;
+}
+
+.swatch-group {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.swatch-group small {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
 .swatch-grid {
   display: grid;
   gap: 12px 8px;
@@ -1175,6 +1234,20 @@ button:disabled {
   position: absolute;
   top: 5px;
   right: 5px;
+}
+
+.swatch-new {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--brand);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
 }
 
 .swatch-name {

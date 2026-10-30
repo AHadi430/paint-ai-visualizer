@@ -956,7 +956,7 @@ export function PaintScreen({
               {nameOf(selected.id)}
               <small>
                 {active.colors[selected.id]
-                  ? `${active.colors[selected.id].name} · ${active.colors[selected.id].code}`
+                  ? `${active.colors[selected.id].name} ${active.colors[selected.id].code} · ${active.colors[selected.id].range}`
                   : 'Choose a colour'}
                 {schemes.length > 1 && ` · Scheme ${activeId.toUpperCase()}`}
               </small>

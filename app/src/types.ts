@@ -2,7 +2,16 @@ export type Shade = {
   code: string;
   name: string;
   hex: string;
+  /** Colour family, e.g. "Whites". */
   category: string;
+  /** Paint range on the shade card, e.g. "Special Emulsion". */
+  range: string;
+  /** Marked "New" on the shade card. */
+  new?: boolean;
+  /** Dark colour with a special price, best applied with a roller. */
+  special?: boolean;
+  /** So pale that its colour could only be read approximately. */
+  approximate?: boolean;
 };
 
 export type Photo = {

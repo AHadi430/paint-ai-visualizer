@@ -27,12 +27,17 @@ export function ShadesScreen({
   notify,
 }: Props) {
   const [detail, setDetail] = useState<Shade>();
+  const rangeCount = new Set(shades.map((shade) => shade.range)).size;
 
   return (
     <div className="screen-content">
       <ScreenHeader
         title="Shade card"
-        subtitle={shades.length ? `${shades.length} colours to explore` : undefined}
+        subtitle={
+          shades.length
+            ? `${shades.length} colours in ${rangeCount} paint range${rangeCount === 1 ? '' : 's'}`
+            : undefined
+        }
         onHome={onHome}
       />
 
@@ -52,15 +57,18 @@ export function ShadesScreen({
             className="shade-detail"
             style={{ background: detail.hex, color: readableOn(detail.hex) }}
           >
-            <span>{detail.category}</span>
+            <span>{detail.range}</span>
             <strong>{detail.name}</strong>
-            <span>Shade {detail.code}</span>
+            <span>
+              Shade {detail.code}
+              {detail.new && ' · New'}
+            </span>
           </div>
 
           <dl className="facts">
             <div>
-              <dt>Code</dt>
-              <dd>{detail.code}</dd>
+              <dt>Range</dt>
+              <dd>{detail.range}</dd>
             </div>
             <div>
               <dt>Colour</dt>
@@ -85,6 +93,20 @@ export function ShadesScreen({
               <dd>{detail.category}</dd>
             </div>
           </dl>
+
+          {detail.special && (
+            <p className="note">
+              Special price. A dark colour: apply it with a roller for the
+              best finish.
+            </p>
+          )}
+
+          {detail.approximate && (
+            <p className="note">
+              A very pale shade, so it may look whiter on screen than on
+              the wall. Check the printed shade card before you buy.
+            </p>
+          )}
 
           <div className="sheet-actions">
             <button
