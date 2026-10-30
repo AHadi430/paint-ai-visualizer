@@ -323,6 +323,37 @@ class ArchitecturalMapService:
                 larger["mask"] = larger["mask"] & ~overlap
 
 
+    @staticmethod
+    def _name_walls_below_ceilings(
+        surfaces: list[dict[str, Any]],
+    ) -> None:
+        """
+        When walls and ceiling are the same colour, the
+        "ceiling" prompt can also box the wall below it. Once
+        split from the real ceiling, a "ceiling" lying below
+        another ceiling is that wall.
+        """
+
+        rows = {
+            id(surface): np.nonzero(surface["mask"])[0]
+            for surface in surfaces
+            if surface["type"] == "ceiling"
+        }
+
+        for surface in surfaces:
+
+            if surface["type"] != "ceiling":
+                continue
+
+            middle = rows[id(surface)].mean()
+
+            if any(
+                middle > other_rows.max()
+                for key, other_rows in rows.items()
+                if key != id(surface)
+            ):
+                surface["type"] = "wall"
+
 
     def analyze(
         self,
@@ -543,6 +574,7 @@ class ArchitecturalMapService:
                 }
             )
 
+        self._name_walls_below_ceilings(kept)
 
 
         return {
