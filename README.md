@@ -32,8 +32,17 @@ Three tabs:
 - **Identify**: tap any colour in a photo. The AI finds the surface and
   reports its colour (name, hex/RGB, warm/cool, light/dark) and the
   closest shades from the shade card, plus the photo's main colours.
-- **Shades**: browse and search the shade card, save favourites and try
-  any shade on a wall.
+- **Shades**: browse the three paint ranges (Special Emulsion, Matt
+  Emulsion and Weather Shine), search them, save favourites and try any
+  shade on a wall.
+
+The shade card is `backend/data/shades.json`. Its colours were measured
+from Griplac's shade-card PDFs: the centre of every swatch, with print
+colours converted to screen colours. Special Emulsion and Weather Shine
+come from the printer's files; Matt Emulsion only from a scan, on which
+the palest shades look almost white (they are marked `approximate` and
+the app tells customers to check the printed card). Weather Shine codes
+start with M (for Majestic).
 
 Run it (with the backend running):
 ```bash
