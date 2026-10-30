@@ -20,6 +20,8 @@ type Shade = {
   name: string;
   hex: string;
   category: string;
+  // Paint range on the shade card, e.g. "Special Emulsion".
+  range: string;
 };
 
 type UploadResponse = {
@@ -340,6 +342,9 @@ export default function App() {
   const [shadeCategory, setShadeCategory] =
     useState('All');
 
+  const [shadeRange, setShadeRange] =
+    useState('All');
+
   const [selectedShade, setSelectedShade] =
     useState<Shade>();
 
@@ -554,13 +559,30 @@ export default function App() {
     };
   }, []);
 
-  const categories = [
+  const ranges = [
     'All',
     ...Array.from(
       new Set(
         shades.map(
-          shade => shade.category
+          shade => shade.range
         )
+      )
+    ),
+  ];
+
+  const categories = [
+    'All',
+    ...Array.from(
+      new Set(
+        shades
+          .filter(
+            shade =>
+              shadeRange === 'All' ||
+              shade.range === shadeRange
+          )
+          .map(
+            shade => shade.category
+          )
       )
     ),
   ];
@@ -586,9 +608,14 @@ export default function App() {
         shade.category ===
           shadeCategory;
 
+      const matchesRange =
+        shadeRange === 'All' ||
+        shade.range === shadeRange;
+
       return (
         matchesSearch &&
-        matchesCategory
+        matchesCategory &&
+        matchesRange
       );
     });
 
@@ -1906,6 +1933,7 @@ void analyze(
         name: item.shadeName,
         hex: item.color,
         category: '',
+        range: '',
       }
     );
   }
@@ -1938,6 +1966,7 @@ void analyze(
       // Make sure the current shade is visible.
       setShadeSearch('');
       setShadeCategory('All');
+      setShadeRange('All');
 
       setMessage(
         `Editing ${name} (currently ${current.name}). Pick a new shade and press Update.`
@@ -2543,6 +2572,7 @@ void analyze(
 
     setShadeSearch('');
     setShadeCategory('All');
+    setShadeRange('All');
 
     setPolygonPoints([]);
     setIsDrawingPolygon(false);
@@ -3034,6 +3064,30 @@ void analyze(
                 disabled={busy}
               />
 
+              {ranges.length > 2 && (
+                <div className="category-row">
+                  {ranges.map(range => (
+                    <button
+                      key={range}
+                      className={
+                        shadeRange === range
+                          ? 'category active'
+                          : 'category'
+                      }
+                      onClick={() => {
+                        setShadeRange(range);
+                        setShadeCategory('All');
+                      }}
+                      disabled={busy}
+                    >
+                      {range === 'All'
+                        ? 'All ranges'
+                        : range}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <div className="category-row">
                 {categories.map(
                   category => (
@@ -3098,6 +3152,8 @@ void analyze(
 
                       <span className="shade-code">
                         {shade.code}
+                        {shadeRange === 'All' &&
+                          ` · ${shade.range}`}
                       </span>
                     </button>
                   )
@@ -3120,7 +3176,7 @@ void analyze(
                     </strong>
 
                     <span>
-                      Shade{' '}
+                      {selectedShade.range}{' '}
                       {selectedShade.code}
                     </span>
 
