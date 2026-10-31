@@ -6,6 +6,10 @@ import numpy as np
 from PIL import Image
 
 
+# A surface's "colour" when it is to be left unpainted.
+ORIGINAL = "original"
+
+
 class RenderService:
 
     @staticmethod
@@ -65,12 +69,14 @@ class RenderService:
         original_rgb: np.ndarray,
         mask: np.ndarray,
         target_rgb: np.ndarray,
+        base_rgb: np.ndarray | None = None,
     ) -> np.ndarray:
         """
         Paint only the selected mask.
 
-        The original image remains untouched outside
-        the mask.
+        The image remains untouched outside the mask:
+        `base_rgb` if given (the photo with other
+        surfaces already painted), else the original.
 
         Lighting and texture are preserved using the
         original surface luminance.
@@ -92,7 +98,7 @@ class RenderService:
         surface_pixels = luminance[mask > 0.05]
 
         if surface_pixels.size < 100:
-            return original_rgb.copy()
+            return (original_rgb if base_rgb is None else base_rgb).copy()
 
         base_luminance = np.percentile(
             surface_pixels,
@@ -100,7 +106,7 @@ class RenderService:
         )
 
         if base_luminance <= 0.01:
-            return original_rgb.copy()
+            return (original_rgb if base_rgb is None else base_rgb).copy()
 
         illumination = (
             luminance / base_luminance
@@ -153,8 +159,14 @@ class RenderService:
 
         alpha = mask[:, :, None]
 
+        base = (
+            image
+            if base_rgb is None
+            else base_rgb.astype(np.float32) / 255.0
+        )
+
         result = (
-            image * (1.0 - alpha)
+            base * (1.0 - alpha)
             + painted * alpha
         )
 
@@ -224,10 +236,6 @@ class RenderService:
                 mask > 0.35
             )
 
-            target_rgb = self.hex_to_rgb(
-                color
-            )
-
             # Only process the surface's own area (plus a margin
             # for the blurs): much faster than the whole photo.
             ys, xs = np.nonzero(mask > 0.01)
@@ -241,10 +249,24 @@ class RenderService:
             x1 = max(0, xs.min() - margin)
             x2 = min(result.shape[1], xs.max() + 1 + margin)
 
+            # Left as in the photo, even where a surface under
+            # it is painted (e.g. stone cladding on a facade).
+            if color == ORIGINAL:
+                alpha = mask[y1:y2, x1:x2, None]
+                result[y1:y2, x1:x2] = (
+                    result[y1:y2, x1:x2] * (1.0 - alpha)
+                    + original[y1:y2, x1:x2] * alpha
+                ).astype(np.uint8)
+                continue
+
+            # Lighting comes from the original photo, and a
+            # surface listed later paints over earlier ones
+            # (e.g. a frame over the whole facade).
             result[y1:y2, x1:x2] = self.recolor_surface(
-                result[y1:y2, x1:x2],
+                original[y1:y2, x1:x2],
                 mask[y1:y2, x1:x2],
-                target_rgb,
+                self.hex_to_rgb(color),
+                base_rgb=result[y1:y2, x1:x2],
             )
 
         # JPEG (not PNG): about 5x smaller, so a new colour reaches
