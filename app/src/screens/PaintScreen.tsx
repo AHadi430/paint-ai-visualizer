@@ -15,6 +15,7 @@ import {
   CloseIcon,
   CompareIcon,
   EraserIcon,
+  MinusIcon,
   PlusIcon,
   RollerIcon,
   ShareIcon,
@@ -78,6 +79,32 @@ function kindOf(type: string) {
   if (label.includes('facade')) return 'Facade';
   return 'Wall';
 }
+
+/** Detector labels for a whole building's outside. */
+const isBuilding = (type: string) => /facade|exterior|building/i.test(type);
+
+/**
+ * A part's "colour" when it is to be left as in the photo, even where
+ * the surface under it is painted (e.g. stone cladding on a facade).
+ * The backend renders "original" as the photo itself.
+ */
+const UNPAINTED: Shade = {
+  code: 'unpainted',
+  name: 'Unpainted',
+  hex: 'original',
+  category: '',
+  range: '',
+};
+
+const isUnpainted = (shade?: Shade) => shade?.code === UNPAINTED.code;
+
+/** Background for a colour dot: hatched when left unpainted. */
+const dotBackground = (shade?: Shade) =>
+  !shade
+    ? 'transparent'
+    : isUnpainted(shade)
+      ? 'repeating-linear-gradient(45deg, #fff 0 3px, #d6d0de 3px 6px)'
+      : shade.hex;
 
 /** "Wall 1", "Wall 2", "Ceiling": numbered only when a kind repeats. */
 function wallNames(walls: Wall[]) {
@@ -218,6 +245,7 @@ export function PaintScreen({
             id: surface.id,
             maskUrl: freshUrl(surface.mask_url),
             kind: kindOf(surface.type),
+            splits: isBuilding(surface.type),
           };
 
           // Skip walls the user already selected by tapping.
@@ -446,16 +474,16 @@ export function PaintScreen({
 
     tapFeedback();
 
-    // Tapping a wall that is already known selects it.
+    // Tapping a wall that is already known selects it. On a whole
+    // building, it picks out the part under the finger instead (a
+    // frame, beam or panel), so parts can have their own colours.
     for (const wall of [...wallsRef.current].reverse()) {
       if (await maskContains(wall.maskUrl, point.x, point.y)) {
-        setSelectedId(wall.id);
-
-        if (pendingShade) {
-          paint(wall.id, pendingShade);
-          onPendingUsed();
+        if (wall.splits && (await addPart(wall, point))) {
+          return;
         }
 
+        choose(wall.id);
         return;
       }
     }
@@ -472,16 +500,126 @@ export function PaintScreen({
         const next = [...wallsRef.current, wall];
 
         setWallsNow(next);
-        setSelectedId(id);
-
-        if (pendingShade) {
-          paint(id, pendingShade);
-          onPendingUsed();
-        }
+        choose(id);
       },
       'Could not find a wall there.'
     );
   }
+
+  /** Select a wall, painting it if a shade is waiting to be tried. */
+  function choose(wallId: string) {
+    setSelectedId(wallId);
+
+    if (pendingShade) {
+      paint(wallId, pendingShade);
+      onPendingUsed();
+    }
+  }
+
+  /**
+   * Pick out the part of `parent` under the tap as a surface of its
+   * own, painted on top of the parent. False if there is no part.
+   */
+  async function addPart(parent: Wall, point: Point) {
+    if (!photo) {
+      return false;
+    }
+
+    setBusy('Finding that part…');
+
+    try {
+      wallCounter.current += 1;
+      const id = `part_${wallCounter.current}`;
+
+      const result = await findSurface(photo.id, point.x, point.y, id, {
+        parentId: parent.id,
+      });
+
+      const part: Wall = {
+        id,
+        maskUrl: freshUrl(result.mask_url),
+        kind: `${parent.kind} part`,
+        part: {
+          parentId: parent.id,
+          x: point.x,
+          y: point.y,
+          level: result.level,
+          levels: result.levels,
+        },
+      };
+
+      // Last in the list, so its colour goes over the parent's.
+      setWallsNow([...wallsRef.current, part]);
+      choose(id);
+      return true;
+    } catch {
+      // No separate part here: the tap selects the whole surface.
+      return false;
+    } finally {
+      setBusy(undefined);
+    }
+  }
+
+  /** Swap the selected part for a smaller or larger area at its tap. */
+  async function resizePart(step: number) {
+    const wall = wallsRef.current.find((item) => item.id === selectedId);
+
+    if (!photo || !wall?.part) {
+      return;
+    }
+
+    const part = wall.part;
+    tapFeedback();
+
+    await run(
+      'Finding the area…',
+      async () => {
+        await waitForRender();
+
+        const result = await findSurface(photo.id, part.x, part.y, wall.id, {
+          parentId: part.parentId,
+          level: part.level + step,
+        });
+
+        setWallsNow(
+          wallsRef.current.map((item) =>
+            item.id === wall.id
+              ? {
+                  ...item,
+                  maskUrl: freshUrl(result.mask_url),
+                  part: { ...part, level: result.level, levels: result.levels },
+                }
+              : item
+          )
+        );
+
+        // Every scheme painting this part needs a new render.
+        setSchemesNow((list) =>
+          list.map((scheme) =>
+            scheme.colors[wall.id] ? { ...scheme, stale: true } : scheme
+          )
+        );
+        void scheduleRender();
+      },
+      'Could not change the area.'
+    );
+  }
+
+  // Parts picked out by a tap but never painted are dropped once
+  // something else is selected, so the list of walls stays short.
+  useEffect(() => {
+    const used = (id: string) =>
+      schemesRef.current.some((scheme) => scheme.colors[id]) ||
+      history.some((entry) => entry.schemes.some((scheme) => scheme.colors[id]));
+
+    const unused = wallsRef.current.filter(
+      (wall) => wall.part && wall.id !== selectedId && !used(wall.id)
+    );
+
+    if (unused.length) {
+      setWallsNow(wallsRef.current.filter((wall) => !unused.includes(wall)));
+    }
+  }, [selectedId]);
 
   function undo() {
     const previous = history[history.length - 1];
@@ -773,6 +911,17 @@ export function PaintScreen({
   const sheetOpen = (!!selected && !comparing) || brushing;
   const paintedWalls = walls.filter((wall) => active.colors[wall.id]);
 
+  // Colours already in this scheme, to give more parts the same one.
+  const usedShades = Array.from(
+    new Map(
+      Object.values(active.colors)
+        .filter((shade) => !isUnpainted(shade))
+        .map((shade) => [shade.code, shade])
+    ).values()
+  );
+
+  const building = walls.find((wall) => wall.splits);
+
   return (
     <div className={sheetOpen ? 'screen-content with-sheet' : 'screen-content'}>
       <Header onHome={onHome}>
@@ -851,7 +1000,7 @@ export function PaintScreen({
                 {Object.values(scheme.colors)
                   .slice(0, 3)
                   .map((shade, index) => (
-                    <i key={index} style={{ background: shade.hex }} />
+                    <i key={index} style={{ background: dotBackground(shade) }} />
                   ))}
               </span>
               {scheme.id.toUpperCase()}
@@ -918,12 +1067,10 @@ export function PaintScreen({
             <span className="spinner dark" />
             Finding the walls in your photo…
           </p>
-        ) : paintedWalls.length === 0 ? (
+        ) : walls.length === 0 ? (
           <p className="hint">
             <TapIcon size={18} />
-            {walls.length
-              ? `We found ${walls.length} surface${walls.length === 1 ? '' : 's'}. Tap one to paint it.`
-              : 'Tap a wall in the photo to paint it.'}
+            Tap a wall in the photo to paint it.
           </p>
         ) : (
           <div className="wall-list">
@@ -936,14 +1083,20 @@ export function PaintScreen({
               >
                 <span
                   className="dot"
-                  style={{ background: active.colors[wall.id]?.hex ?? 'transparent' }}
+                  style={{ background: dotBackground(active.colors[wall.id]) }}
                 />
                 {nameOf(wall.id)}
                 <small>{active.colors[wall.id]?.name ?? 'No colour'}</small>
               </button>
             ))}
 
-            <span className="wall-list-hint">Tap any wall to change it</span>
+            <span className="wall-list-hint">
+              {building
+                ? `Tap the building to paint one part, like a frame or beam. Tap ${nameOf(building.id)} here to paint all of it.`
+                : paintedWalls.length
+                  ? 'Tap any wall to change it'
+                  : 'Tap a wall in the photo or here to paint it'}
+            </span>
           </div>
         ))}
 
@@ -955,9 +1108,11 @@ export function PaintScreen({
             <>
               {nameOf(selected.id)}
               <small>
-                {active.colors[selected.id]
-                  ? `${active.colors[selected.id].name} ${active.colors[selected.id].code} · ${active.colors[selected.id].range}`
-                  : 'Choose a colour'}
+                {!active.colors[selected.id]
+                  ? 'Choose a colour'
+                  : isUnpainted(active.colors[selected.id])
+                    ? 'Left as in the photo'
+                    : `${active.colors[selected.id].name} ${active.colors[selected.id].code} · ${active.colors[selected.id].range}`}
                 {schemes.length > 1 && ` · Scheme ${activeId.toUpperCase()}`}
               </small>
             </>
@@ -965,6 +1120,54 @@ export function PaintScreen({
           onClose={() => setSelectedId(undefined)}
         >
           <div className="sheet-tools">
+            {selected.part && (
+              <>
+                <button
+                  type="button"
+                  className="tool-btn"
+                  onClick={() => resizePart(-1)}
+                  disabled={!!busy || selected.part.level === 0}
+                >
+                  <MinusIcon size={18} />
+                  Smaller
+                </button>
+
+                {selected.part.level < selected.part.levels - 1 ? (
+                  <button
+                    type="button"
+                    className="tool-btn"
+                    onClick={() => resizePart(1)}
+                    disabled={!!busy}
+                  >
+                    <PlusIcon size={18} />
+                    Larger
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="tool-btn"
+                    onClick={() => setSelectedId(selected.part?.parentId)}
+                    disabled={!!busy}
+                  >
+                    <PlusIcon size={18} />
+                    All of {nameOf(selected.part.parentId)}
+                  </button>
+                )}
+              </>
+            )}
+
+            {selected.part && !isUnpainted(active.colors[selected.id]) && (
+              <button
+                type="button"
+                className="tool-btn"
+                onClick={() => paint(selected.id, UNPAINTED)}
+                disabled={!!busy}
+              >
+                <EraserIcon size={18} />
+                Leave unpainted
+              </button>
+            )}
+
             <button type="button" className="tool-btn" onClick={startEdges} disabled={!!busy}>
               <BrushIcon size={18} />
               Fix edges
@@ -988,6 +1191,7 @@ export function PaintScreen({
             favorites={favorites}
             selectedCode={active.colors[selected.id]?.code}
             onPick={(shade) => paint(selected.id, shade)}
+            recent={usedShades}
             columns={5}
           />
         </Sheet>
@@ -1256,7 +1460,7 @@ function CompareSchemes({
                 .filter((wall) => scheme.colors[wall.id])
                 .map((wall) => (
                   <li key={wall.id}>
-                    <i style={{ background: scheme.colors[wall.id].hex }} />
+                    <i style={{ background: dotBackground(scheme.colors[wall.id]) }} />
                     <span>
                       {nameOf(wall.id)}: {scheme.colors[wall.id].name}
                     </span>

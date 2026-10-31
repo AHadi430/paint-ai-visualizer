@@ -86,20 +86,30 @@ export async function uploadPhoto(file: File): Promise<Photo> {
   };
 }
 
-/** Find the wall/surface under a tap (SAM). */
+/**
+ * Find the wall/surface under a tap (SAM). With `parentId`, the part of
+ * that surface under the tap instead (one frame of a whole facade).
+ * `level` picks one of the area sizes found, smallest first.
+ */
 export function findSurface(
   imageId: string,
   x: number,
   y: number,
-  surfaceId: string
+  surfaceId: string,
+  options: { parentId?: string; level?: number } = {}
 ) {
-  return post<{ mask_url: string }>('/api/visualizer/segment', {
-    image_id: imageId,
-    x,
-    y,
-    surface_id: surfaceId,
-    surface_type: 'wall',
-  });
+  return post<{ mask_url: string; level: number; levels: number }>(
+    '/api/visualizer/segment',
+    {
+      image_id: imageId,
+      x,
+      y,
+      surface_id: surfaceId,
+      surface_type: 'wall',
+      parent_id: options.parentId,
+      level: options.level,
+    }
+  );
 }
 
 /** Current mask image of a surface (a new URL after every edit). */

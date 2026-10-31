@@ -16,6 +16,8 @@ type Props = {
   favorites: Set<string>;
   selectedCode?: string;
   onPick: (shade: Shade) => void;
+  /** Colours already used, offered first for quick reuse. */
+  recent?: Shade[];
   /** Number of swatches per row. */
   columns?: number;
 };
@@ -26,6 +28,7 @@ export function ShadePicker({
   favorites,
   selectedCode,
   onPick,
+  recent = [],
   columns = 4,
 }: Props) {
   const [query, setQuery] = useState('');
@@ -94,6 +97,26 @@ export function ShadePicker({
 
   return (
     <div className="shade-picker">
+      {recent.length > 0 && (
+        <div className="recent-shades">
+          <span className="picker-label">Used in this photo</span>
+
+          <div className="chips">
+            {recent.map((shade) => (
+              <button
+                key={shade.code}
+                type="button"
+                className={selectedCode === shade.code ? 'chip active' : 'chip'}
+                onClick={() => onPick(shade)}
+              >
+                <i className="chip-dot" style={{ background: shade.hex }} />
+                {shade.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {ranges.length > 1 && (
         <div className="range-tabs" role="tablist" aria-label="Paint range">
           {[ALL, ...ranges].map((name) => (

@@ -155,6 +155,12 @@ export const PlusIcon = (p: IconProps) => (
   </Icon>
 );
 
+export const MinusIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M5 12h14" />
+  </Icon>
+);
+
 export const TrashIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M4 7h16" />

@@ -59,6 +59,17 @@ export type Wall = {
   maskUrl: string;
   /** Kind of surface, e.g. "Wall", "Ceiling", "Column". */
   kind: string;
+  /** A whole building's outside: tapping it picks out one part. */
+  splits?: boolean;
+  /** Set for a part picked out of a bigger surface by a tap. */
+  part?: {
+    parentId: string;
+    x: number;
+    y: number;
+    /** Which of the area sizes found for the tap, smallest first. */
+    level: number;
+    levels: number;
+  };
 };
 
 /** One colour scheme: which shade goes on which wall. */
