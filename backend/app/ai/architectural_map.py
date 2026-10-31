@@ -72,7 +72,7 @@ PAINTABLE_GROUPS = [
 
 PROTECTED_GROUPS = [
     ["window", "glass window", "door", "doorway", "garage door", "gate"],
-    ["railing", "radiator", "air conditioner", "lamp", "wire"],
+    ["railing", "radiator", "air conditioner", "lamp", "wire", "utility pole"],
     ["person", "car", "motorcycle", "tree", "plant"],
     ["sofa", "bed", "cabinet", "shelf", "television", "picture frame"],
 ]
@@ -246,6 +246,21 @@ class ArchitecturalMapService:
         union = np.logical_or(a, b).sum()
 
         return float(np.logical_and(a, b).sum() / union) if union else 0.0
+
+
+    @staticmethod
+    def _box_iou(a: list[float], b: list[float]) -> float:
+
+        width = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
+        height = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+        overlap = width * height
+        union = (
+            (a[2] - a[0]) * (a[3] - a[1])
+            + (b[2] - b[0]) * (b[3] - b[1])
+            - overlap
+        )
+
+        return overlap / union if union > 0 else 0.0
 
 
     @staticmethod
@@ -455,6 +470,20 @@ class ArchitecturalMapService:
             )
 
 
+        # -------------------------------------------------
+        # The sky. Outdoors, the "ceiling" prompt often
+        # finds it. Only a confident sky detection counts:
+        # pale ceilings also score as "sky", but lower.
+        # -------------------------------------------------
+
+        skies = self._detect(
+            image,
+            ["sky"],
+            threshold=0.6,
+            text_threshold=0.3,
+        )
+
+
         surfaces = []
 
         min_area = max(800, int(image_area * 0.005))
@@ -471,6 +500,14 @@ class ArchitecturalMapService:
             x1, y1, x2, y2 = detection["box"]
 
             if (x2 - x1) * (y2 - y1) > image_area * 0.85:
+                continue
+
+            # A "ceiling" that is more surely the sky.
+            if "ceiling" in detection["label"] and any(
+                self._box_iou(detection["box"], sky["box"]) > 0.6
+                and sky["score"] > detection["score"] + 0.1
+                for sky in skies
+            ):
                 continue
 
             try:
