@@ -672,7 +672,13 @@ button:disabled {
   line-height: 0;
 }
 
-.frame > img:first-child {
+/* The photo and its overlays, zoomed and moved together. */
+.zoom {
+  position: relative;
+  transform-origin: 0 0;
+}
+
+.zoom > img:first-child {
   display: block;
   max-width: 100%;
   max-height: 56vh;
@@ -680,7 +686,7 @@ button:disabled {
 }
 
 /* Keep the photo visible above an open colour sheet. */
-.with-sheet .frame > img:first-child {
+.with-sheet .zoom > img:first-child {
   max-height: calc(50vh - 120px);
   max-height: calc(50dvh - var(--safe-top) - 110px);
 }
@@ -705,12 +711,14 @@ button:disabled {
   pointer-events: none;
 }
 
+/* Markers on the photo keep their size when it is zoomed:
+   --unzoom is 1 / zoom. */
 .ripple {
   position: absolute;
-  width: 72px;
-  height: 72px;
-  margin: -36px 0 0 -36px;
-  border: 3px solid #fff;
+  width: calc(72px * var(--unzoom, 1));
+  height: calc(72px * var(--unzoom, 1));
+  margin: calc(-36px * var(--unzoom, 1)) 0 0 calc(-36px * var(--unzoom, 1));
+  border: calc(3px * var(--unzoom, 1)) solid #fff;
   border-radius: 50%;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15), inset 0 0 0 1px rgba(0, 0, 0, 0.1);
   pointer-events: none;
@@ -739,8 +747,8 @@ button:disabled {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 3px;
-  margin-left: -1.5px;
+  width: calc(3px * var(--unzoom, 1));
+  margin-left: calc(-1.5px * var(--unzoom, 1));
   background: #fff;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
   pointer-events: none;
@@ -754,7 +762,7 @@ button:disabled {
   place-items: center;
   width: 44px;
   height: 44px;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) scale(var(--unzoom, 1));
   border: 3px solid #fff;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
@@ -778,6 +786,43 @@ button:disabled {
   line-height: normal;
   text-transform: uppercase;
   pointer-events: none;
+}
+
+.zoom-controls {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  line-height: normal;
+}
+
+.zoom-controls button {
+  display: grid;
+  place-items: center;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.zoom-controls button:disabled {
+  opacity: 0.35;
+}
+
+.zoom-controls .zoom-fit {
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .tag-left {
@@ -857,10 +902,10 @@ button:disabled {
 
 .pin {
   position: absolute;
-  width: 30px;
-  height: 30px;
+  width: calc(30px * var(--unzoom, 1));
+  height: calc(30px * var(--unzoom, 1));
   transform: translate(-50%, -50%);
-  border: 3px solid #fff;
+  border: calc(3px * var(--unzoom, 1)) solid #fff;
   border-radius: 50%;
   background: transparent;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 3px 10px rgba(0, 0, 0, 0.4);

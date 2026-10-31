@@ -190,6 +190,7 @@ export function IdentifyScreen({
       <PhotoStage
         src={photo.url}
         alt="Your photo"
+        zoomKey={photo.id}
         onTap={handleTap}
         busyLabel={busy}
       >

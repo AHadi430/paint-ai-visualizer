@@ -1036,6 +1036,7 @@ export function PaintScreen({
       <PhotoStage
         src={active.painted ?? photo.url}
         alt="Your photo"
+        zoomKey={photo.id}
         onTap={comparing || brushing ? undefined : handleTap}
         compareSrc={comparing ? original?.url ?? photo.url : undefined}
         busyLabel={busy}
@@ -1261,7 +1262,8 @@ export function PaintScreen({
               ? brushOp === 'add'
                 ? 'Paint over parts of the wall that were missed.'
                 : 'Paint over things that should not be painted, like pipes or trim.'
-              : 'Paint over wires, poles, signs or anything else, then press Erase.'}
+              : 'Paint over wires, poles, signs or anything else, then press Erase.'}{' '}
+            Pinch or use + to zoom in for detail, and move around with two fingers.
           </p>
 
           <div className="tool-actions">
