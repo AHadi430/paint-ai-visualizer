@@ -168,22 +168,17 @@ class SAMService:
             ),
         )
 
-    def segment_from_point(
+    def point_candidates(
         self,
         image_path: str,
         x: float,
         y: float,
     ):
-
-        point_coords = np.array(
-            [[x, y]],
-            dtype=np.float32,
-        )
-
-        point_labels = np.array(
-            [1],
-            dtype=np.int32,
-        )
+        """
+        SAM's three candidate masks for a tap, roughly a
+        small part, a larger section and the whole object,
+        with their scores.
+        """
 
         with self.lock:
 
@@ -191,159 +186,189 @@ class SAMService:
                 image_path
             )
 
-            width, height = (
-                self._image_size
-            )
-
             masks, scores, _ = (
                 self.predictor.predict(
-                    point_coords=point_coords,
-                    point_labels=point_labels,
+                    point_coords=np.array(
+                        [[x, y]],
+                        dtype=np.float32,
+                    ),
+                    point_labels=np.array(
+                        [1],
+                        dtype=np.int32,
+                    ),
                     multimask_output=True,
                 )
             )
 
-        image_area = (
-            width * height
+        return (
+            masks.astype(bool),
+            scores,
         )
 
-        candidates = []
+    def segment_at(
+        self,
+        image_path: str,
+        x: float,
+        y: float,
+        within: np.ndarray | None = None,
+        level: int | None = None,
+    ):
+        """
+        The surface under a tap.
 
-        # -------------------------------------------------
-        # Evaluate every SAM candidate
-        # -------------------------------------------------
+        SAM offers areas of different sizes for a tap.
+        They are listed smallest first ("levels"), and
+        `level` picks one; by default the most likely.
 
-        for index, mask in enumerate(
-            masks
-        ):
+        With `within` (the mask of a surface the tap is
+        on, e.g. a whole facade), only parts of that
+        surface clearly smaller than it are offered: the
+        frame, beam or panel under the finger.
 
-            mask_bool = (
-                mask.astype(bool)
-            )
+        Returns (mask, score, level, number of levels).
+        """
 
-            area = float(
-                np.sum(mask_bool)
-            )
+        masks, scores = self.point_candidates(
+            image_path,
+            x,
+            y,
+        )
 
-            if area <= 0:
+        height, width = masks.shape[1:]
+        image_area = width * height
+
+        px = int(max(0, min(width - 1, round(x))))
+        py = int(max(0, min(height - 1, round(y))))
+
+        levels = []
+
+        for mask, score in zip(masks, scores):
+
+            if within is not None:
+
+                mask = mask & within
+
+            # The tapped point must belong to the area.
+            if not mask[py, px]:
                 continue
 
-            area_ratio = (
-                area / image_area
-            )
+            area = float(mask.sum())
 
-            # The selected point must actually
-            # belong to the candidate mask.
-            px = int(
-                max(
-                    0,
-                    min(
-                        width - 1,
-                        round(x),
-                    ),
-                )
-            )
-
-            py = int(
-                max(
-                    0,
-                    min(
-                        height - 1,
-                        round(y),
-                    ),
-                )
-            )
-
-            if not mask_bool[py, px]:
+            if within is not None and (
+                area < image_area * 0.001
+                or area > within.sum() * 0.7
+            ):
                 continue
 
-            candidates.append(
+            # SAM sometimes offers the same area twice.
+            if any(
+                self._iou(mask, kept["mask"]) > 0.9
+                for kept in levels
+            ):
+                continue
+
+            levels.append(
                 {
-                    "index": index,
-                    "mask": mask_bool,
-                    "sam_score": float(
-                        scores[index]
-                    ),
-                    "area_ratio": area_ratio,
+                    "mask": mask,
+                    "sam_score": float(score),
+                    "area_ratio": area / image_area,
                 }
             )
 
-        if not candidates:
+        if not levels:
             raise ValueError(
                 "SAM did not produce a valid surface."
             )
 
-        # -------------------------------------------------
+        levels.sort(
+            key=lambda item: item["area_ratio"]
+        )
+
+        if level is None:
+
+            level = (
+                # A part of a surface: SAM's most
+                # confident part.
+                max(
+                    range(len(levels)),
+                    key=lambda index: levels[index]["sam_score"],
+                )
+                if within is not None
+                else self._best_surface_level(levels)
+            )
+
+        level = max(0, min(len(levels) - 1, level))
+        chosen = levels[level]
+
+        return (
+            chosen["mask"],
+            chosen["sam_score"],
+            level,
+            len(levels),
+        )
+
+    @staticmethod
+    def _iou(a: np.ndarray, b: np.ndarray) -> float:
+
+        union = np.logical_or(a, b).sum()
+
+        return float(np.logical_and(a, b).sum() / union) if union else 0.0
+
+    @staticmethod
+    def _best_surface_level(levels: list[dict]) -> int:
+        """
+        The most likely whole surface for a tap on a
+        part of the photo no surface covers yet.
+        """
+
         # Reject obviously catastrophic masks.
-        # -------------------------------------------------
-
         usable = [
-            candidate
-            for candidate in candidates
-            if candidate["area_ratio"] < 0.55
-        ]
+            index
+            for index, item in enumerate(levels)
+            if item["area_ratio"] < 0.55
+        ] or list(range(len(levels)))
 
-        if usable:
-            candidates = usable
+        # Prefer a reasonably sized local surface. We
+        # don't simply choose the smallest mask because
+        # that can produce tiny fragments.
+        def candidate_score(index):
 
-        # -------------------------------------------------
-        # Prefer a reasonably sized local surface.
-        #
-        # We don't simply choose the smallest mask
-        # because that can produce tiny fragments.
-        # -------------------------------------------------
-
-        def candidate_score(candidate):
-
-            sam_score = (
-                candidate["sam_score"]
-            )
-
-            area_ratio = (
-                candidate["area_ratio"]
-            )
+            area_ratio = levels[index]["area_ratio"]
 
             # Strong penalty for enormous regions.
             if area_ratio > 0.35:
-
                 area_penalty = 0.25
-
             elif area_ratio > 0.20:
-
                 area_penalty = 0.50
-
             elif area_ratio > 0.08:
-
                 area_penalty = 0.85
-
             # Slivers and specks: people tap to paint a
             # surface, so a whole wall beats a fragment.
             elif area_ratio < 0.003:
-
                 area_penalty = 0.3
-
             elif area_ratio < 0.01:
-
                 area_penalty = 0.6
-
             else:
-
                 area_penalty = 1.0
 
-            return (
-                sam_score
-                * area_penalty
-            )
+            return levels[index]["sam_score"] * area_penalty
 
-        best = max(
-            candidates,
-            key=candidate_score,
+        return max(usable, key=candidate_score)
+
+    def segment_from_point(
+        self,
+        image_path: str,
+        x: float,
+        y: float,
+    ):
+
+        mask, score, _, _ = self.segment_at(
+            image_path,
+            x,
+            y,
         )
 
-        return (
-            best["mask"],
-            best["sam_score"],
-        )
+        return mask, score
 
 
 sam_service = SAMService()

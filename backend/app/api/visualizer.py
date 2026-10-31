@@ -25,7 +25,7 @@ from ..services.image_service import (
 from ..ai.sam import sam_service
 from ..services.clean_service import clean_service
 from ..services import color_service
-from ..services.mask_refine import refine_mask
+from ..services.mask_refine import keep_tapped_piece, refine_mask
 
 
 router = APIRouter(
@@ -48,6 +48,12 @@ class SegmentRequest(BaseModel):
     y: float
     surface_id: str | None = None
     surface_type: str = "manual surface"
+    # Find a part of this surface (e.g. one frame of a
+    # whole facade) instead of a new whole surface.
+    parent_id: str | None = None
+    # Which of the area sizes SAM offers for the tap,
+    # smallest first. None picks the most likely.
+    level: int | None = None
 
 class PolygonSegmentRequest(BaseModel):
     image_id: str
@@ -708,20 +714,57 @@ def segment_image(
 ):
     image_path = _find_upload(request.image_id)
 
+    parent = None
+
+    if request.parent_id:
+
+        parent_path = (
+            Path(settings.output_dir)
+            / f"{request.image_id}_{_check_surface_id(request.parent_id)}.png"
+        )
+
+        if not parent_path.is_file():
+            raise HTTPException(
+                404,
+                "That surface was not found.",
+            )
+
+        parent = np.array(Image.open(parent_path).convert("L")) > 127
+
     try:
-        mask, confidence = (
-            sam_service.segment_from_point(
+        mask, confidence, level, levels = (
+            sam_service.segment_at(
                 str(image_path),
                 request.x,
                 request.y,
+                within=parent,
+                level=request.level,
             )
         )
+
+        if parent is not None:
+            mask = keep_tapped_piece(mask, request.x, request.y)
 
         # Smoother outline that follows the wall's edges.
         mask = refine_mask(
             mask,
             np.array(Image.open(image_path).convert("RGB")),
         )
+
+        if parent is not None:
+            mask &= parent
+
+    except ValueError as exc:
+        if parent is not None:
+            raise HTTPException(
+                422,
+                "No separate part found here.",
+            ) from exc
+
+        raise HTTPException(
+            500,
+            f"SAM segmentation failed: {exc}",
+        ) from exc
 
     except Exception as exc:
         raise HTTPException(
@@ -783,6 +826,8 @@ def segment_image(
         ),
         "confidence": confidence,
         "box": box,
+        "level": level,
+        "levels": levels,
         "status": "segmented",
     }
 

@@ -102,3 +102,40 @@ def refine_mask(
         return mask
 
     return refined
+
+
+def keep_tapped_piece(
+    mask: np.ndarray,
+    x: float,
+    y: float,
+) -> np.ndarray:
+    """
+    The piece of a part's mask around a tap.
+
+    SAM's mask of a part (a frame, a beam) can spill into a neighbouring
+    surface as a trail of specks joined by thin threads. Cutting the
+    threads and keeping only the tapped piece drops the spill.
+    """
+
+    mask = mask.astype(bool)
+    height, width = mask.shape
+
+    size = max(3, int(round(max(height, width) * 0.006)))
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size))
+
+    # Opening cuts threads thinner than the kernel.
+    opened = cv2.morphologyEx(mask.astype(np.uint8), cv2.MORPH_OPEN, kernel)
+    _, labels = cv2.connectedComponents(opened, connectivity=8)
+
+    px = int(max(0, min(width - 1, round(x))))
+    py = int(max(0, min(height - 1, round(y))))
+    label = labels[py, px]
+
+    # The tap was on a thread itself: nothing to separate.
+    if label == 0:
+        return mask
+
+    # Back to the real outline around the kept piece.
+    piece = cv2.dilate((labels == label).astype(np.uint8), kernel) > 0
+
+    return mask & piece
